@@ -30,14 +30,19 @@ provider "google" {
 
 # ── Module network: chọn theo cloud ──
 module "network_aws" {
-  count          = var.cloud == "aws" ? 1 : 0
-  source         = "../../../modules/network/aws"
-  providers      = { aws = aws }
-  project        = var.project
-  env            = var.env
-  vpc_cidr       = var.vpc_cidr
-  public_subnets = var.public_subnets
-  azs            = var.azs
+  count             = var.cloud == "aws" ? 1 : 0
+  source            = "../../../modules/network/aws"
+  providers         = { aws = aws }
+  project           = var.project
+  env               = var.env
+  vpc_cidr          = var.vpc_cidr
+  azs               = var.azs
+  public_subnets    = var.public_subnets
+  private_subnets   = var.private_subnets
+  enable_nat        = var.enable_nat
+  allowed_ssh_cidrs = var.allowed_ssh_cidrs
+  allowed_api_cidrs = var.allowed_api_cidrs
+  allowed_web_cidrs = var.allowed_web_cidrs
 }
 
 module "network_gcp" {
@@ -58,7 +63,8 @@ module "kubernetes_aws" {
   project          = var.project
   env              = var.env
   cluster_role_arn = var.eks_role_arn
-  subnet_ids       = concat(module.network_aws[*].public_subnet_ids, [[]])[0]
+  # Node K8s đặt trong PRIVATE subnet (an toàn hơn — ra internet qua NAT)
+  subnet_ids = concat(module.network_aws[*].private_subnet_ids, [[]])[0]
 }
 
 module "kubernetes_gcp" {
