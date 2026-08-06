@@ -1,0 +1,13 @@
+apiVersion: v2
+name: _base
+description: |
+  Chart generic dùng CHUNG cho mọi project trên iac-platform.
+  Backend + Frontend + PostgreSQL + Ingress + Monitoring + Backup.
+  KHÔNG sửa template khi thêm project — chỉ thêm values/<project>/values-<env>.yaml.
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+
+# LƯU Ý: Các component cấp CLUSTER (kube-prometheus-stack, ingress-nginx,
+# metrics-server, ebs-csi, cert-manager) KHÔNG nằm trong chart này — chúng được
+# cài 1 lần mỗi cluster qua helm/_cluster (hoặc Terraform/Ansible như deploy-web).

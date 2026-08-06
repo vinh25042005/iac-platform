@@ -1,0 +1,81 @@
+{{- if .Values.postgres.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: {{ include "base.namespace" . }}
+  labels:
+    app: postgres
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  serviceName: postgres
+  replicas: {{ .Values.postgres.replicas }}
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: {{ include "base.vaultRole" . | quote }}
+        vault.hashicorp.com/agent-inject-status: "update"
+        vault.hashicorp.com/tls-skip-verify: {{ .Values.vault.tlsSkipVerify | quote }}
+        vault.hashicorp.com/agent-requests-cpu: "100m"
+        vault.hashicorp.com/agent-limits-cpu: "250m"
+        vault.hashicorp.com/agent-init-requests-cpu: "100m"
+        vault.hashicorp.com/agent-init-limits-cpu: "250m"
+        vault.hashicorp.com/agent-inject-secret-postgres: {{ .Values.vault.secrets.postgres | quote }}
+        vault.hashicorp.com/agent-inject-template-postgres: |
+          export POSTGRES_PASSWORD={{"{{"}}- with secret "{{ .Values.vault.secrets.postgres }}" }}{{"{{"}} .Data.data.{{ .Values.vault.postgresKeys.password }} }}{{"{{"}}- end }}
+    spec:
+      containers:
+        - name: postgres
+          image: {{ .Values.images.postgres }}
+          imagePullPolicy: Always
+          command:
+            - sh
+            - -c
+            - |
+              source /vault/secrets/postgres
+              exec docker-entrypoint.sh postgres
+          ports:
+            - containerPort: {{ .Values.postgres.port }}
+          env:
+            - name: POSTGRES_USER
+              value: {{ .Values.postgres.user | quote }}
+            - name: POSTGRES_DB
+              value: {{ .Values.postgres.database | quote }}
+          volumeMounts:
+            - name: pgdata
+              mountPath: /var/lib/postgresql/data
+              subPath: pgdata
+  volumeClaimTemplates:
+    - metadata:
+        name: pgdata
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: {{ include "base.storageClass" . | quote }}
+        resources:
+          requests:
+            storage: {{ .Values.postgres.storage.size }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: {{ include "base.namespace" . }}
+  labels:
+    app: postgres
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  ports:
+    - port: {{ .Values.postgres.port }}
+      targetPort: {{ .Values.postgres.port }}
+  selector:
+    app: postgres
+  clusterIP: None
+{{- end }}

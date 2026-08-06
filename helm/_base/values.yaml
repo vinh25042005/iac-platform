@@ -1,0 +1,100 @@
+# ============================================================================
+# helm/_base/values.yaml — Chart generic dùng CHUNG cho mọi project
+#
+# ⚠️ KHÔNG sửa template code khi thêm project mới.
+#    Mọi giá trị khác nhau per project nằm trong:
+#      helm/_base/values/<project>/values.yaml         (mặc định project)
+#      helm/_base/values/<project>/values-<env>.yaml   (dev/stg/prd)
+#    Sinh tự động bằng: scripts/new-project.sh <PROJECT> <CLOUD>
+# ============================================================================
+
+global:
+  project: myproject        # ← TÊN PROJECT: quyết định tên resource, vault role, image
+  cloud: aws                # aws | gcp (chọn storage class phù hợp)
+
+env: dev                    # dev | stg | prd → namespace = <project>-<env>
+namespace:
+  create: false             # ArgoCD tạo namespace qua syncOptions: CreateNamespace=true
+  name: ""                  # "" = <project>-<env>
+
+images:
+  repo: docker.io/youruser  # ← registry user/org (đổi per company)
+  tag: latest
+  backend: ""               # "" → docker.io/<user>/<project>-backend:<tag>
+  frontend: ""              # "" → docker.io/<user>/<project>-frontend:<tag>
+  postgres: postgres:16-alpine
+
+vault:
+  addr: https://vault.example.local:8200   # ← Vault address (EIP/domain)
+  role: ""                                  # "" → mặc định = <project>
+  caConfigMap: ""                           # ConfigMap chứa ca.crt để trust TLS self-signed
+  tlsSkipVerify: true
+  secrets:                                  # map: <file> → <path kv-v2 trong Vault>
+    postgres: secret/data/postgres
+    jwt: secret/data/jwt
+    grafana: secret/data/grafana
+  postgresKeys:
+    password: password
+  jwtKey: secret
+
+backend:
+  enabled: true
+  replicas: 2
+  port: 3001
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits:   { cpu: 500m, memory: 256Mi }
+
+frontend:
+  enabled: true
+  replicas: 2
+  port: 3000
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits:   { cpu: 500m, memory: 256Mi }
+
+postgres:
+  enabled: true
+  replicas: 1
+  port: 5432
+  user: postgres
+  database: shopdb
+  storage:
+    size: 10Gi
+    className: ""           # "" → helper base.storageClass (aws: <project>-ssm-waitforfirstconsumer)
+  backup:
+    enabled: true
+    schedule: "0 */6 * * *"         # 6 giờ 1 lần
+    s3Bucket: myproject-backup
+    s3Region: ap-southeast-1
+
+config:
+  nodeEnv: production
+  jwtExpiresIn: 7d
+  frontendUrl: http://myproject.local
+  backendInternalUrl: http://backend:3001
+
+ingress:
+  className: nginx
+  host: myproject.local
+  name: ""                  # "" → <project>-ingress
+  tlsSecret: ""             # "" → <project>-tls
+  clusterIssuer: selfsigned-issuer
+  tls:
+    enabled: true
+
+monitoring:
+  enabled: true
+  prometheusAddress: ""     # "" → http://<release>-kube-promethe-prometheus:9090
+  grafanaHost: grafana.myproject.local
+  ruleGroupName: ""         # "" → <project>
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPU: 50
+
+storage:
+  ebsCSI:
+    enabled: false          # EBS CSI driver cài cluster-wide (Terraform) — không qua chart

@@ -1,4 +1,5 @@
-# Application mẫu per (project × env) — new-project.sh sinh cho từng env
+# Application mẫu per (project × env) — MỌI project dùng CHUNG chart helm/_base,
+# chỉ khác nhau ở values/<PROJECT>/values-<ENV>.yaml
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -11,10 +12,11 @@ spec:
   source:
     repoURL: https://github.com/<your-org>/iac-platform.git
     targetRevision: main
-    path: helm/<PROJECT>
+    path: helm/_base
     helm:
       valueFiles:
-        - env/values-<ENV>.yaml
+        - values/<PROJECT>/values.yaml
+        - values/<PROJECT>/values-<ENV>.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: <PROJECT>-<ENV>
@@ -22,3 +24,5 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

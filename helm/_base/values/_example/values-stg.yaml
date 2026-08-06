@@ -1,4 +1,7 @@
+env: stg
 backend:
+  replicas: 2
+frontend:
   replicas: 2
 config:
   nodeEnv: production

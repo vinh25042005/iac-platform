@@ -1,0 +1,31 @@
+apiVersion: v2
+name: _cluster
+description: |
+  Chart CÀI 1 LẦN MỖI CLUSTER — các component cấp hạ tầng dùng chung cho MỌI project:
+  kube-prometheus-stack, ingress-nginx, metrics-server, aws-ebs-csi-driver, cert-manager.
+  KHÔNG cài chart này cho từng project — chỉ cài 1 lần khi bootstrap cluster
+  (ArgoCD root cho cluster, hoặc Terraform/Ansible như deploy-web).
+type: application
+version: 1.0.0
+
+dependencies:
+  - name: kube-prometheus-stack
+    version: "~68"
+    repository: "https://prometheus-community.github.io/helm-charts"
+    condition: kube-prometheus-stack.enabled
+  - name: ingress-nginx
+    version: "~4.11"
+    repository: "https://kubernetes.github.io/ingress-nginx"
+    condition: ingress-nginx.enabled
+  - name: metrics-server
+    version: "~3.12"
+    repository: "https://kubernetes-sigs.github.io/metrics-server"
+    condition: metrics-server.enabled
+  - name: aws-ebs-csi-driver
+    version: "~2.37"
+    repository: "https://kubernetes-sigs.github.io/aws-ebs-csi-driver"
+    condition: aws-ebs-csi-driver.enabled
+  - name: cert-manager
+    version: "~1.14"
+    repository: "https://charts.jetstack.io"
+    condition: cert-manager.enabled

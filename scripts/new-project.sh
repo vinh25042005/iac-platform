@@ -7,7 +7,8 @@
 #         ./scripts/new-project.sh billing  gcp
 #
 # Sinh: terraform/environments/<PROJECT>/{dev,stg,prd}/<CLOUD>/
-#       helm/<PROJECT>/  +  argocd/apps/<PROJECT>-<env>.yaml
+#       helm/_base/values/<PROJECT>/   (chart dùng CHUNG + values riêng)
+#       argocd/apps/<PROJECT>-<env>.yaml (trỏ tới helm/_base)
 #       đăng ký vào projects.txt
 # =============================================================================
 set -euo pipefail
@@ -43,11 +44,19 @@ EOF
   echo "  ✅ $dst"
 done
 
-echo ">>> [2/4] Helm chart..."
-if [ -d "$ROOT/helm/_template" ]; then
-  cp -r "$ROOT/helm/_template" "$ROOT/helm/$PROJECT"
-  sed -i "s|name: _template|name: $PROJECT|" "$ROOT/helm/$PROJECT/Chart.yaml"
-  echo "  ✅ helm/$PROJECT"
+echo ">>> [2/4] Helm values (chart dùng CHUNG helm/_base + values riêng)..."
+VDIR="$ROOT/helm/_base/values/$PROJECT"
+EXAMPLE="$ROOT/helm/_base/values/_example"
+if [ -d "$EXAMPLE" ]; then
+  mkdir -p "$VDIR"
+  cp "$EXAMPLE/values.yaml" "$VDIR/values.yaml"
+  sed -i "s|project: myproject|project: $PROJECT|" "$VDIR/values.yaml"
+  for env in $ENVS; do
+    cp "$EXAMPLE/values-$env.yaml" "$VDIR/values-$env.yaml"
+  done
+  echo "  ✅ helm/_base/values/$PROJECT/"
+else
+  echo "  ⚠️ Không thấy $EXAMPLE — bỏ qua helm values"
 fi
 
 echo ">>> [3/4] ArgoCD apps..."
@@ -65,14 +74,18 @@ spec:
   source:
     repoURL: $ORIGIN
     targetRevision: main
-    path: helm/$PROJECT
+    path: helm/_base
     helm:
-      valueFiles: ["env/values-$env.yaml"]
+      valueFiles:
+        - values/$PROJECT/values.yaml
+        - values/$PROJECT/values-$env.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: $PROJECT-$env
   syncPolicy:
     automated: { prune: true, selfHeal: true }
+    syncOptions:
+      - CreateNamespace=true
 EOF
 done
 echo "  ✅ argocd/apps/$PROJECT-*.yaml"

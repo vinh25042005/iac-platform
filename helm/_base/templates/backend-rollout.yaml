@@ -1,0 +1,118 @@
+{{- if .Values.backend.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: backend
+  namespace: {{ include "base.namespace" . }}
+  labels:
+    app: backend
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  replicas: {{ .Values.backend.replicas }}
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+      annotations:
+        # Vault Agent Injector — secret đọc TRỰC TIẾP từ Vault (path/role từ values)
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: {{ include "base.vaultRole" . | quote }}
+        vault.hashicorp.com/agent-inject-status: "update"
+        vault.hashicorp.com/tls-skip-verify: {{ .Values.vault.tlsSkipVerify | quote }}
+        # ⚠️ BẮT BUỘC: vault-agent-init phải chạy ĐẦU TIÊN (mặc định injector nối
+        # init container vào CUỐI danh sách). prisma-migrate source
+        # /vault/secrets/backend-env → nếu không, secrets chưa tồn tại → Init:Error.
+        vault.hashicorp.com/agent-init-first: "true"
+        vault.hashicorp.com/agent-requests-cpu: "100m"
+        vault.hashicorp.com/agent-limits-cpu: "250m"
+        vault.hashicorp.com/agent-init-requests-cpu: "100m"
+        vault.hashicorp.com/agent-init-limits-cpu: "250m"
+        vault.hashicorp.com/agent-inject-secret-backend-env: {{ .Values.vault.secrets.postgres | quote }}
+        vault.hashicorp.com/agent-inject-template-backend-env: |
+          {{"{{"}} with secret "{{ .Values.vault.secrets.postgres }}" }}
+          export DATABASE_URL='postgresql://{{ .Values.postgres.user }}:{{"{{"}} .Data.data.{{ .Values.vault.postgresKeys.password }} }}@postgres:{{ .Values.postgres.port }}/{{ .Values.postgres.database }}?schema=public'
+          {{"{{"}} end }}
+          {{"{{"}} with secret "{{ .Values.vault.secrets.jwt }}" }}
+          export JWT_SECRET='{{"{{"}} .Data.data.{{ .Values.vault.jwtKey }} }}'
+          {{"{{"}} end }}
+    spec:
+      imagePullSecrets:
+        - name: dockerhub-secret
+      initContainers:
+        - name: wait-for-postgres
+          image: busybox:1.36
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting for postgres:5432 ..."
+              for i in $(seq 1 60); do
+                if nc -z postgres {{ .Values.postgres.port }} 2>/dev/null; then
+                  echo "Postgres is ready!"
+                  exit 0
+                fi
+                sleep 2
+              done
+              echo "Timeout waiting for postgres"
+              exit 1
+        - name: prisma-migrate
+          image: {{ include "base.image.backend" . }}
+          imagePullPolicy: Always
+          command: ["/bin/sh", "-c"]
+          args: [". /vault/secrets/backend-env && npx prisma db push"]
+          envFrom:
+            - configMapRef: { name: backend-config }
+      containers:
+        - name: backend
+          image: {{ include "base.image.backend" . }}
+          imagePullPolicy: Always
+          command: ["/bin/sh", "-c"]
+          args: [". /vault/secrets/backend-env && exec node dist/index.js"]
+          ports:
+            - containerPort: {{ .Values.backend.port }}
+          envFrom:
+            - configMapRef: { name: backend-config }
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - backend
+                        - vault
+                        - postgres
+                topologyKey: kubernetes.io/hostname
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: backend
+  strategy:
+    canary:
+      maxSurge: "25%"
+      maxUnavailable: 0
+      steps:
+        - setWeight: 20
+        - pause: { duration: 30 }
+        - analysis:
+            templates:
+              - templateName: backend-error-rate
+        - setWeight: 50
+        - pause: { duration: 30 }
+        - setWeight: 80
+        - pause: { duration: 30 }
+{{- end }}

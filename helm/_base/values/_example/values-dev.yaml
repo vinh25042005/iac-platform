@@ -1,3 +1,4 @@
+env: dev
 backend:
   replicas: 1
 config:
