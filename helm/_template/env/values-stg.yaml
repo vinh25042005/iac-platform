@@ -1,0 +1,4 @@
+backend:
+  replicas: 2
+config:
+  nodeEnv: production

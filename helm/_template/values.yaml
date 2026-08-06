@@ -1,0 +1,17 @@
+# Chart dùng chung — mỗi env override qua env/values-<env>.yaml
+images:
+  backend:  docker.io/<your-user>/<PROJECT>-backend:latest
+  frontend: docker.io/<your-user>/<PROJECT>-frontend:latest
+
+namespace: <PROJECT>-stg
+
+backend:
+  replicas: 2
+  port: 3001
+
+frontend:
+  replicas: 2
+
+config:
+  frontendUrl: ""
+  nodeEnv: production

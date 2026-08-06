@@ -1,0 +1,22 @@
+# App-of-apps: root này trỏ tới thư mục argocd/apps — mọi Application per (project×env)
+# nằm ở đó sẽ được ArgoCD đồng bộ tự động.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: iac-platform
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/<your-org>/iac-platform.git
+    targetRevision: main
+    path: argocd/apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

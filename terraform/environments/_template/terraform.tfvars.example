@@ -1,0 +1,8 @@
+# Sao chép thành terraform.tfvars cho từng env (new-project.sh tự sinh)
+project = "techshop"
+env     = "stg"
+cloud   = "aws"            # aws | gcp
+
+region = "ap-southeast-1"
+# gcp_project = "my-gcp-project"
+# gcp_region  = "asia-southeast1"

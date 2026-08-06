@@ -1,0 +1,24 @@
+# Application mẫu per (project × env) — new-project.sh sinh cho từng env
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: <PROJECT>-<ENV>
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/<your-org>/iac-platform.git
+    targetRevision: main
+    path: helm/<PROJECT>
+    helm:
+      valueFiles:
+        - env/values-<ENV>.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: <PROJECT>-<ENV>
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
