@@ -13,6 +13,6 @@
 #
 # Hiện có:
 #   network/aws     — VPC/subnet/IGW/NAT/SG (functional)
-#   kubernetes/aws  — EKS (skeleton — bổ sung theo nhu cầu)
+#   kubernetes/aws  — kubeadm cluster (EC2 nodes + IAM SSM + inventory + join)
 #   database/aws    — RDS (skeleton)
 # ─────────────────────────────────────────────────────────────────────────────

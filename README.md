@@ -21,12 +21,16 @@ iac-platform/
 ├── projects.txt                       # registry các project đã đăng ký
 ├── terraform/
 │   ├── modules/                       # tái sử dụng (AWS)
-│   │   ├── network/aws/
-│   │   ├── kubernetes/aws/
-│   │   └── database/aws/
+│   │   ├── network/aws/               # VPC 2 tầng + NAT + SG
+│   │   ├── kubernetes/aws/            # kubeadm cluster (EC2 nodes + IAM + inventory)
+│   │   └── database/aws/              # RDS skeleton
 │   └── environments/                  # 1 dir / (project×env)
 │       ├── _template/                 # bản mẫu (generator copy)
 │       └── <project>/<env>/
+├── ansible/
+│   ├── playbooks/k8s-cluster.yml      # kubeadm init + join + Calico + ArgoCD
+│   ├── roles/{common,master,worker}/  # cài node + init + join
+│   └── inventories/                   # sinh tự động bởi Terraform
 ├── helm/
 │   └── _template/                     # chart dùng chung cho 1 app
 ├── argocd/
@@ -38,14 +42,26 @@ iac-platform/
 └── docs/GOLDEN-PATH.md                # hướng dẫn chi tiết
 ```
 
+## Cụm K8s (kubeadm self-managed)
+
+Giống cụm deploy-web: `node[0]` = master (public subnet), `node[1..]` = worker (private subnet).
+Terraform dựng: VPC + EC2 + NLB + Ansible boot kubeadm (Calico, cert-manager, ArgoCD).
+Kubeconfig + join command lưu SSM `/k8s/<project>-<env>/` — pipeline self-heal mỗi lần apply.
+
 ## Bắt đầu nhanh
 
 ```bash
+# 0. Tạo AWS key pair (1 lần)
+aws ec2 create-key-pair --key-name techshop-key --region ap-southeast-1 --query 'KeyMaterial' --output text > ~/.ssh/techshop-key.pem && chmod 600 ~/.ssh/techshop-key.pem
+
 # 1. Sinh dự án mới
 ./scripts/new-project.sh techshop
+#    → sửa terraform/environments/techshop/stg/terraform.tfvars (key_name, node_count)
 
-# 2. Chạy pipeline (Jenkins) MODE=infra để dựng hạ tầng cho techshop/stg
-# 3. Push code app → MODE=app → build + deploy qua ArgoCD
+# 2. Dựng cụm (local)
+make apply PROJ=techshop ENV=stg
+
+#    Hoặc qua Jenkins MODE=infra
 ```
 
 Chi tiết: [docs/GOLDEN-PATH.md](docs/GOLDEN-PATH.md)

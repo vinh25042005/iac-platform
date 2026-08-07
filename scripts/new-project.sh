@@ -23,6 +23,7 @@ TEMPLATE="$ROOT/terraform/environments/_template"
 [ -d "$TEMPLATE" ] || { echo "❌ Không thấy $TEMPLATE"; exit 1; }
 
 echo ">>> [1/4] Terraform environments ($PROJECT × $ENVS)..."
+mkdir -p "$ROOT/ansible/inventories"
 for env in $ENVS; do
   dst="$ROOT/terraform/environments/$PROJECT/$env"
   mkdir -p "$dst"
@@ -33,6 +34,11 @@ for env in $ENVS; do
 project = "$PROJECT"
 env     = "$env"
 region  = "$REGION"
+
+# ── Cụm kubeadm (sửa theo ý bạn) ──
+key_name      = "$PROJECT-key"   # ← AWS key pair đã tạo
+instance_type = "t3.small"
+node_count    = 3                # ← điền số node (1 master + N-1 worker)
 EOF
   echo "  ✅ $dst"
 done

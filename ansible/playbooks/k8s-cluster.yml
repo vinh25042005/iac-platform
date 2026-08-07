@@ -1,0 +1,91 @@
+---
+# Playbook: Cài đặt kubeadm Kubernetes cluster (port từ deploy-web)
+# Chạy sau khi Terraform tạo xong EC2 instances.
+# Inventory do module terraform/modules/kubernetes/aws sinh ra
+# (ansible/inventories/<project>-<env>.ini).
+#
+# Usage:
+#   ansible-playbook -i inventories/<project>-<env>.ini playbooks/k8s-cluster.yml
+#   -e project=techshop -e env=stg
+# ===============================================================
+
+- name: Prepare all K8s nodes (containerd + kubeadm + kubectl + kubelet)
+  hosts: k8s_cluster
+  become: yes
+  roles:
+    - common
+
+- name: Initialize master node (kubeadm init + Calico + upload SSM)
+  hosts: master
+  become: yes
+  serial: 1
+  roles:
+    - master
+
+- name: Join worker nodes
+  hosts: workers
+  become: yes
+  serial: 1
+  roles:
+    - worker
+
+# ─── Post-deploy: cert-manager + ArgoCD + ClusterIssuer ───
+- name: Post-deploy tasks
+  hosts: master
+  become: yes
+  tasks:
+    - name: Install cert-manager (CRDs + manifest + fix RBAC + CA)
+      shell: |
+        kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.15.0/cert-manager.crds.yaml 2>/dev/null || true
+        kubectl create namespace cert-manager 2>/dev/null || true
+        kubectl apply -n cert-manager \
+          -f https://github.com/cert-manager/cert-manager/releases/download/v1.15.0/cert-manager.yaml
+        kubectl wait --for=condition=available --timeout=3m \
+          -n cert-manager deployment/cert-manager-webhook
+
+        # Fix RBAC leader election
+        kubectl create clusterrole cert-manager-leader-election --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null
+        kubectl patch clusterrole cert-manager-leader-election --type json -p='[{"op":"add","path":"/rules/-","value":{"apiGroups":["coordination.k8s.io"],"resources":["leases"],"verbs":["get","list","watch","create","update","patch","delete"]}}]' 2>/dev/null || true
+        kubectl create clusterrolebinding cert-manager-leader-election --clusterrole=cert-manager-leader-election --serviceaccount=cert-manager:cert-manager --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null
+        kubectl rollout restart -n cert-manager deployment/cert-manager
+        kubectl wait --for=condition=available --timeout=2m -n cert-manager deployment/cert-manager
+        sleep 10
+
+        # Inject CA vào validating + mutating webhooks nếu cainjector chưa làm
+        CA=$(kubectl get secret -n cert-manager cert-manager-webhook-ca -o jsonpath='{.data.tls\.crt}' 2>/dev/null || echo "")
+        if [ -n "$CA" ]; then
+          for wh_type in validating mutating; do
+            CURRENT_CA=$(kubectl get ${wh_type}webhookconfigurations cert-manager-webhook -o json | jq -r '.webhooks[0].clientConfig.caBundle' 2>/dev/null)
+            if [ "$CURRENT_CA" != "$CA" ]; then
+              kubectl patch ${wh_type}webhookconfigurations cert-manager-webhook \
+                --type json -p="[{\"op\": \"replace\", \"path\": \"/webhooks/0/clientConfig/caBundle\", \"value\": \"$CA\"}]"
+            fi
+          done
+        fi
+      changed_when: false
+
+    - name: Install ArgoCD (server-side để tránh lỗi CRD >262KB)
+      shell: |
+        kubectl create namespace argocd 2>/dev/null || true
+        curl -sL https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml | \
+          kubectl apply --server-side -n argocd -f -
+        kubectl wait --for=condition=available --timeout=3m \
+          -n argocd deployment/argocd-server
+      changed_when: false
+
+    - name: Create self-signed ClusterIssuer (cho Ingress TLS, tránh ArgoCD health check issue)
+      shell: |
+        kubectl apply -f - <<EOF
+        apiVersion: cert-manager.io/v1
+        kind: ClusterIssuer
+        metadata:
+          name: {{ project }}-selfsigned-issuer
+        spec:
+          selfSigned: {}
+        EOF
+        kubectl wait --for=condition=ready --timeout=60s clusterissuer/{{ project }}-selfsigned-issuer 2>/dev/null || true
+      changed_when: false
+
+    - name: Announce cluster ready
+      debug:
+        msg: ">>> Cluster {{ project }}-{{ env }} READY! (node = kubeadm, ArgoCD installed)"

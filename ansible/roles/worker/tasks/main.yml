@@ -1,0 +1,35 @@
+---
+# Role: worker — Join K8s cluster (worker node)
+# Port từ deploy-web — SSM path theo prefix <project>-<env> (group_vars/all.yml)
+
+- name: Get AWS region
+  shell: curl -s http://169.254.169.254/latest/meta-data/placement/region
+  register: aws_region
+  changed_when: false
+
+- name: Wait for join command from SSM
+  shell: |
+    for i in $(seq 1 30); do
+      CMD=$(aws ssm get-parameter --name "{{ ssm_prefix }}/worker-join-command" \
+        --query Parameter.Value --output text --region {{ aws_region.stdout }} 2>/dev/null)
+      if [ -n "$CMD" ] && [ "$CMD" != "None" ]; then
+        echo "$CMD"
+        exit 0
+      fi
+      sleep 10
+    done
+    echo "TIMEOUT"
+    exit 1
+  register: join_cmd
+  changed_when: false
+
+- name: Join cluster
+  shell: "{{ join_cmd.stdout }}"
+  args:
+    creates: /etc/kubernetes/kubelet.conf
+  register: join_result
+  changed_when: "'This node has joined the cluster' in join_result.stdout"
+
+- name: Announce join result
+  debug:
+    msg: ">>> [WORKER] Joined cluster successfully!"

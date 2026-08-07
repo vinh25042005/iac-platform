@@ -1,0 +1,8 @@
+---
+# Global variables cho K8s cluster (có thể override per project×env)
+k8s_version: "1.32"
+pod_cidr: "10.244.0.0/16"
+
+# SSM prefix — mỗi (project × env) dùng riêng, tránh đụng giữa các cụm
+#   VD: project=techshop, env=stg → /k8s/techshop-stg/join-command
+ssm_prefix: "/k8s/{{ project }}-{{ env }}"

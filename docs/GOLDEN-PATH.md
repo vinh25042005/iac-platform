@@ -17,9 +17,20 @@ Script tự sinh:
 
 ## 2. Dựng hạ tầng (MODE=infra)
 
+Terraform dựng **cụm kubeadm đầy đủ**:
+- `network`: VPC 2 tầng + NAT + SG (least privilege)
+- `kubernetes`: EC2 `node[0]`=master (public) + `node[1..]`=worker (private)
+- NLB + target group → ingress-nginx
+- `null_resource.ansible`: kubeadm init + join + Calico + cert-manager + ArgoCD
+- Kubeconfig + join command → SSM `/k8s/<project>-<env>/` (self-heal khi cluster đổi)
+
 Chạy 1 lần khi thêm env hoặc khi sửa IaC:
 
 ```bash
+# 0. (1 lần) tạo AWS key pair, rồi điền vào terraform.tfvars
+aws ec2 create-key-pair --key-name techshop-key --region ap-southeast-1 \
+  --query 'KeyMaterial' --output text > ~/.ssh/techshop-key.pem && chmod 600 ~/.ssh/techshop-key.pem
+
 # Local:
 make plan PROJ=techshop ENV=stg
 make apply PROJ=techshop ENV=stg
@@ -28,6 +39,7 @@ make apply PROJ=techshop ENV=stg
 ```
 
 Remote state tách riêng theo `(project, env)` — an toàn, không đụng nhau.
+Sau apply, kubectl dùng được ngay: kubeconfig tự lấy từ SSM vào `~/.kube/config`.
 
 ## 3. Deploy app (MODE=app)
 
