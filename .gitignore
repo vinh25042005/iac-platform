@@ -1,0 +1,36 @@
+# ── Terraform ──
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+.terraform.lock.hcl
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# ── Ansible ──
+# Inventory sinh tự động bởi Terraform — chứa IP thật, KHÔNG commit
+ansible/inventories/*.ini
+*.retry
+~/.ansible-vault-pass
+
+# ── Portal (Backstage) ──
+# node_modules + .yarn cache nằm trong portal/.gitignore, thêm bảo vệ cấp root
+portal/node_modules/
+portal/.yarn/cache/
+portal/dist/
+portal/dist-types/
+portal/.cache/
+
+# ── Env / secrets ──
+.env
+*.local.yaml
+*-credentials.yaml
+
+# ── OS / editor ──
+.DS_Store
+*.swp
+.idea/
+.vscode/

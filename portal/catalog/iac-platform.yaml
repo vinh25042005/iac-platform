@@ -1,0 +1,69 @@
+# =============================================================================
+# catalog/iac-platform.yaml — Software Catalog cho iac-platform
+# Đăng ký các project (System) + environment (Component) kiểu CatalogHub.
+# Mỗi project thêm bằng scripts/new-project.sh → thêm 1 System + N Component ở đây.
+# =============================================================================
+---
+# ── Project: techshop ──
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: techshop
+  title: TechShop
+  description: TechShop e-commerce platform (main project)
+  annotations:
+    iac-platform.io/project: techshop
+    iac-platform.io/cloud: aws
+spec:
+  owner: group:platform-team
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: techshop-stg
+  title: TechShop - Staging
+  description: Staging environment cluster (kubeadm, 3 nodes)
+  annotations:
+    iac-platform.io/project: techshop
+    iac-platform.io/env: stg
+    iac-platform.io/state: terraform/environments/techshop/stg
+spec:
+  type: environment
+  lifecycle: experimental
+  owner: group:platform-team
+  system: techshop
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: techshop-dev
+  title: TechShop - Dev
+  description: Dev environment cluster
+  annotations:
+    iac-platform.io/project: techshop
+    iac-platform.io/env: dev
+    iac-platform.io/state: terraform/environments/techshop/dev
+spec:
+  type: environment
+  lifecycle: experimental
+  owner: group:platform-team
+  system: techshop
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: techshop-prd
+  title: TechShop - Production
+  description: Production environment cluster
+  annotations:
+    iac-platform.io/project: techshop
+    iac-platform.io/env: prd
+    iac-platform.io/state: terraform/environments/techshop/prd
+spec:
+  type: environment
+  lifecycle: experimental
+  owner: group:platform-team
+  system: techshop

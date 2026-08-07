@@ -1,0 +1,76 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+# =============================================================================
+# Template: Tạo project mới trên iac-platform (giống màn hình "Create Project"
+# của CatalogHub mentor). Chạy scripts/new-project.sh sinh toàn bộ scaffold:
+#   terraform/environments/<project>/{dev,stg,prd}/
+#   helm/_base/values/<project>/
+#   argocd/apps/<project>-<env>.yaml
+#   đăng ký vào projects.txt
+# =============================================================================
+kind: Template
+metadata:
+  name: iac-platform-project
+  title: Create iac-platform Project
+  description: Tạo project mới trên iac-platform — sinh Terraform environments, Helm values, ArgoCD apps (giống CatalogHub)
+spec:
+  owner: guests
+  type: service
+
+  parameters:
+    - title: Project info
+      required:
+        - projectName
+      properties:
+        projectName:
+          title: Project Name
+          type: string
+          description: Tên dự án (slug) — dùng cho namespace, tên resource, helm chart
+          pattern: '^[a-z0-9-]+$'
+          ui:autofocus: true
+        envs:
+          title: Environments
+          type: array
+          description: Danh sách môi trường sẽ sinh
+          items:
+            type: string
+            enum: [dev, stg, prd]
+          default: [dev, stg, prd]
+          uniqueItems: true
+
+  steps:
+    # Bước 1: clone repo iac-platform về workspace (để chạy script + commit)
+    - id: fetch-template
+      name: Clone iac-platform
+      action: fetch:plain
+      input:
+        url: https://github.com/vinh25042005/iac-platform.git
+
+    # Bước 2: chạy new-project.sh với project name + envs
+    - id: run-generator
+      name: Run new-project.sh
+      action: run:command
+      input:
+        path: scripts
+        command: bash
+        args:
+          - -c
+          - 'ENVS="${{ parameters.envs | join(" ") }}" ./new-project.sh ${{ parameters.projectName }} && cat ${{ parameters.projectName }}.log || true'
+
+    # Bước 3: commit + push project scaffold lên GitHub
+    - id: commit
+      name: Commit & Push
+      action: run:command
+      input:
+        path: .
+        command: bash
+        args:
+          - -c
+          - |
+            git add -A
+            git -c user.name="backstage" -c user.email="backstage@iac-platform.local" commit -m "project: create ${{ parameters.projectName }} (via Backstage)" || true
+            git push origin HEAD || true
+
+  output:
+    links:
+      - title: Open project
+        url: http://localhost:3000
