@@ -1,7 +1,7 @@
 // ===========================================================================
-// iac-platform — MỘT pipeline dùng chung cho MỌI dự án × môi trường × cloud
+// iac-platform — MỘT pipeline dùng chung cho MỌI dự án × môi trường (AWS)
 //
-//   MODE=infra → Terraform plan/apply cho (PROJECT × ENV × CLOUD)
+//   MODE=infra → Terraform plan/apply cho (PROJECT × ENV)
 //   MODE=app   → build + scan + sign + cập nhật manifest → ArgoCD deploy
 //
 // Yêu cầu Jenkins:
@@ -17,7 +17,6 @@ pipeline {
     parameters {
         choice(name: 'PROJECT', choices: ['techshop'], description: 'Project (thêm qua scripts/new-project.sh, rồi thêm vào đây)')
         choice(name: 'ENV', choices: ['dev', 'stg', 'prd'], description: 'Environment')
-        choice(name: 'CLOUD', choices: ['aws', 'gcp'], description: 'Cloud provider')
         choice(name: 'MODE', choices: ['infra', 'app'], description: 'infra: Terraform provision | app: build + deploy')
         choice(name: 'INFRA_ACTION', choices: ['plan', 'apply'], description: 'infra mode: plan hay apply')
         string(name: 'APP_BRANCH', defaultValue: 'main', description: 'Branch repo app để build (app mode)')
@@ -41,7 +40,7 @@ pipeline {
             steps { script {
                 env.APP = params.PROJECT
                 env.IMAGE_TAG = "${params.PROJECT}-${params.ENV}-${BUILD_NUMBER}"
-                echo "→ PROJECT=${params.PROJECT} ENV=${params.ENV} CLOUD=${params.CLOUD} MODE=${params.MODE}"
+                echo "→ PROJECT=${params.PROJECT} ENV=${params.ENV} MODE=${params.MODE}"
                 echo "→ IMAGE_TAG=${env.IMAGE_TAG}"
             } }
         }
@@ -56,11 +55,11 @@ pipeline {
             } }
         }
 
-        // ── MODE=infra: Terraform theo (project × env × cloud) ──
+        // ── MODE=infra: Terraform theo (project × env) ──
         stage('Infra: Terraform') {
             when { expression { params.MODE == 'infra' } }
             steps {
-                dir("terraform/environments/${params.PROJECT}/${params.ENV}/${params.CLOUD}") {
+                dir("terraform/environments/${params.PROJECT}/${params.ENV}") {
                     sh 'terraform init -reconfigure -input=false'
                     sh 'terraform plan -input=false -out=tfplan'
                     script {
@@ -144,7 +143,7 @@ pipeline {
     }
 
     post {
-        success { echo "✅ iac-platform: ${params.MODE} ${params.PROJECT}/${params.ENV}/${params.CLOUD} @ ${env.IMAGE_TAG}" }
+        success { echo "✅ iac-platform: ${params.MODE} ${params.PROJECT}/${params.ENV} @ ${env.IMAGE_TAG}" }
         failure { echo "❌ CI thất bại" }
         always { cleanWs() }
     }

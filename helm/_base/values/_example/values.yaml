@@ -3,13 +3,12 @@
 # KHÔNG đụng vào template code của helm/_base.
 #
 # Cách dùng:
-#   1. scripts/new-project.sh <PROJECT> <CLOUD>   (tự sinh bản cho project bạn)
+#   1. scripts/new-project.sh <PROJECT>   (tự sinh bản cho project bạn)
 #   2. Sửa các giá trị dưới đây cho hợp dự án
 # ============================================================================
 
 global:
   project: myproject        # ← TÊN PROJECT (tên resource, vault role, image name)
-  cloud: aws                # aws | gcp
 
 env: dev
 

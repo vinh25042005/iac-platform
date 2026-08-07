@@ -54,15 +54,12 @@
 {{- end -}}
 
 {{/*
-  base.storageClass — StorageClass cho postgres:
-    aws → <project>-ssm-waitforfirstconsumer (Terraform tạo, WaitForFirstConsumer)
-    gcp → standard-rwo (mặc định GKE)
+  base.storageClass — StorageClass cho postgres (AWS):
+    <project>-ssm-waitforfirstconsumer (Terraform tạo, WaitForFirstConsumer)
 */}}
 {{- define "base.storageClass" -}}
 {{- if .Values.postgres.storage.className -}}
 {{- .Values.postgres.storage.className -}}
-{{- else if eq .Values.global.cloud "gcp" -}}
-{{- "standard-rwo" -}}
 {{- else -}}
 {{- printf "%s-ssm-waitforfirstconsumer" (include "base.fullname" .) -}}
 {{- end -}}

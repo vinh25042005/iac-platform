@@ -1,18 +1,18 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# Modules — tái sử dụng cho mọi project × env × cloud
+# Modules — tái sử dụng cho mọi project × env (AWS)
 #
 # Quy tắc:
-#   - Mỗi module có bản per-provider: aws/ (EKS/RDS/VPC) vs gcp/ (GKE/CloudSQL/VPC).
-#   - Environment chọn module bằng biến `cloud` (count pattern — xem environments/_template/main.tf).
+#   - Mỗi module đặt trong thư mục theo provider (aws/).
+#   - Environment gọi module trực tiếp (không count pattern — xem environments/_template/main.tf).
 #   - KHÔNG đặt secret vào module — secret luôn từ Vault runtime.
 #
-# Cách thêm module provider mới:
-#   mkdir -p modules/<tên>/<cloud>/
+# Cách thêm module mới:
+#   mkdir -p modules/<tên>/aws/
 #   viết main.tf + variables.tf + outputs.tf
-#   (rồi reference từ environments/_template/main.tf qua count)
+#   (rồi reference từ environments/_template/main.tf)
 #
 # Hiện có:
-#   network/{aws,gcp}     — VPC/subnet/IGW (functional)
-#   kubernetes/{aws,gcp}  — EKS/GKE (skeleton — bổ sung theo nhu cầu)
-#   database/{aws,gcp}    — RDS/CloudSQL (skeleton)
+#   network/aws     — VPC/subnet/IGW/NAT/SG (functional)
+#   kubernetes/aws  — EKS (skeleton — bổ sung theo nhu cầu)
+#   database/aws    — RDS (skeleton)
 # ─────────────────────────────────────────────────────────────────────────────

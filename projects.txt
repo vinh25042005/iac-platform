@@ -1,3 +1,4 @@
-# Registry các project — thêm project mới bằng: scripts/new-project.sh <PROJECT> <CLOUD>
-# Định dạng: PROJECT CLOUD
-techshop aws
+# Registry các project — thêm project mới bằng: scripts/new-project.sh <PROJECT>
+# Định dạng: PROJECT (AWS-only)
+techshop
+techshop

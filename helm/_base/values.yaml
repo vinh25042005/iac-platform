@@ -5,12 +5,11 @@
 #    Mọi giá trị khác nhau per project nằm trong:
 #      helm/_base/values/<project>/values.yaml         (mặc định project)
 #      helm/_base/values/<project>/values-<env>.yaml   (dev/stg/prd)
-#    Sinh tự động bằng: scripts/new-project.sh <PROJECT> <CLOUD>
+#    Sinh tự động bằng: scripts/new-project.sh <PROJECT>
 # ============================================================================
 
 global:
   project: myproject        # ← TÊN PROJECT: quyết định tên resource, vault role, image
-  cloud: aws                # aws | gcp (chọn storage class phù hợp)
 
 env: dev                    # dev | stg | prd → namespace = <project>-<env>
 namespace:

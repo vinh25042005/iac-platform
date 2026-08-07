@@ -3,32 +3,31 @@
 ## 1. Thêm một dự án mới
 
 ```bash
-./scripts/new-project.sh <PROJECT> <CLOUD>
-# VD: ./scripts/new-project.sh techshop aws
-#     ./scripts/new-project.sh billing gcp
+./scripts/new-project.sh <PROJECT>
+# VD: ./scripts/new-project.sh techshop
 ```
 
 Script tự sinh:
-- `terraform/environments/<PROJECT>/{dev,stg,prd}/<CLOUD>/` (main.tf, variables, backend, tfvars)
-- `helm/<PROJECT>/` (chart dùng chung + values theo env)
+- `terraform/environments/<PROJECT>/{dev,stg,prd}/` (main.tf, variables, backend, tfvars)
+- `helm/_base/values/<PROJECT>/` (chart dùng chung + values theo env)
 - `argocd/apps/<PROJECT>-<env>.yaml` cho từng env
-- Đăng ký `<PROJECT> <CLOUD>` vào `projects.txt`
+- Đăng ký `<PROJECT>` vào `projects.txt`
 
 > Sau đó mở `Jenkinsfile` → thêm `<PROJECT>` vào dropdown `PROJECT` (hoặc để script tự làm).
 
 ## 2. Dựng hạ tầng (MODE=infra)
 
-Chạy 1 lần khi thêm env/cloud hoặc khi sửa IaC:
+Chạy 1 lần khi thêm env hoặc khi sửa IaC:
 
 ```bash
 # Local:
-make plan PROJ=techshop ENV=stg CLOUD=aws
-make apply PROJ=techshop ENV=stg CLOUD=aws
+make plan PROJ=techshop ENV=stg
+make apply PROJ=techshop ENV=stg
 
-# Hoặc qua Jenkins (param MODE=infra, INFRA_ACTION=plan|apply, PROJECT/ENV/CLOUD)
+# Hoặc qua Jenkins (param MODE=infra, INFRA_ACTION=plan|apply, PROJECT/ENV)
 ```
 
-Remote state tách riêng theo `(project, env, cloud)` — an toàn, không đụng nhau.
+Remote state tách riêng theo `(project, env)` — an toàn, không đụng nhau.
 
 ## 3. Deploy app (MODE=app)
 
@@ -43,6 +42,6 @@ Remote state tách riêng theo `(project, env, cloud)` — an toàn, không đ�
 ## 4. Nguyên tắc
 
 - **1 nguồn**: mọi thứ nằm trong repo này (IaC + chart + app-of-apps + pipeline).
-- **Per-provider modules**: `modules/network/aws` vs `gcp` — chọn bằng biến `cloud` (count pattern).
-- **State tách biệt** per (project×env×cloud).
+- **Modules**: `modules/network/aws`, `modules/kubernetes/aws`, `modules/database/aws`.
+- **State tách biệt** per (project×env).
 - **Secret chỉ ở Vault** — không bao giờ trong code/image.

@@ -1,21 +1,16 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # environments/_template/main.tf
-# MẪU cho 1 (project × env × cloud). new-project.sh copy thư mục này rồi set cloud.
-#
-# Điểm mấu chốt: module `source` KHÔNG thể động — nên dùng COUNT PATTERN:
-#   var.cloud == "aws" → dùng module .../network/aws
-#   var.cloud == "gcp" → dùng module .../network/gcp
+# MẪU cho 1 (project × env) — AWS-only. new-project.sh copy thư mục này rồi set env.
 # ─────────────────────────────────────────────────────────────────────────────
 terraform {
   backend "s3" {
     bucket  = "iac-platform-state"
-    key     = "KEY_PLACEHOLDER" # ← new-project.sh thay = <project>/<env>/<cloud>/terraform.tfstate
+    key     = "KEY_PLACEHOLDER" # ← new-project.sh thay = <project>/<env>/terraform.tfstate
     region  = "ap-southeast-1"
     encrypt = true
   }
   required_providers {
-    aws    = { source = "hashicorp/aws", version = "~> 5.0" }
-    google = { source = "hashicorp/google", version = "~> 5.0" }
+    aws = { source = "hashicorp/aws", version = "~> 5.0" }
   }
 }
 
@@ -23,16 +18,9 @@ provider "aws" {
   region = var.region
 }
 
-provider "google" {
-  project = var.gcp_project
-  region  = var.gcp_region
-}
-
-# ── Module network: chọn theo cloud ──
-module "network_aws" {
-  count             = var.cloud == "aws" ? 1 : 0
+# ── Module network (AWS) ──
+module "network" {
   source            = "../../../modules/network/aws"
-  providers         = { aws = aws }
   project           = var.project
   env               = var.env
   vpc_cidr          = var.vpc_cidr
@@ -45,33 +33,11 @@ module "network_aws" {
   allowed_web_cidrs = var.allowed_web_cidrs
 }
 
-module "network_gcp" {
-  count       = var.cloud == "gcp" ? 1 : 0
-  source      = "../../../modules/network/gcp"
-  providers   = { google = google }
-  project     = var.project
-  env         = var.env
-  region      = var.gcp_region
-  subnet_cidr = var.subnet_cidr
-}
-
-# ── Module kubernetes: chọn theo cloud ──
-module "kubernetes_aws" {
-  count            = var.cloud == "aws" ? 1 : 0
+# ── Module kubernetes (AWS EKS) — node chạy trong PRIVATE subnet (an toàn hơn, ra internet qua NAT) ──
+module "kubernetes" {
   source           = "../../../modules/kubernetes/aws"
-  providers        = { aws = aws }
   project          = var.project
   env              = var.env
   cluster_role_arn = var.eks_role_arn
-  # Node K8s đặt trong PRIVATE subnet (an toàn hơn — ra internet qua NAT)
-  subnet_ids = concat(module.network_aws[*].private_subnet_ids, [[]])[0]
-}
-
-module "kubernetes_gcp" {
-  count     = var.cloud == "gcp" ? 1 : 0
-  source    = "../../../modules/kubernetes/gcp"
-  providers = { google = google }
-  project   = var.project
-  env       = var.env
-  region    = var.gcp_region
+  subnet_ids       = module.network.private_subnet_ids
 }

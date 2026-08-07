@@ -6,12 +6,6 @@ variable "env" {
   type = string
 }
 
-variable "cloud" {
-  type        = string
-  description = "aws | gcp"
-}
-
-# AWS
 variable "region" {
   type    = string
   default = "ap-southeast-1"
@@ -63,20 +57,4 @@ variable "allowed_web_cidrs" {
 variable "eks_role_arn" {
   type    = string
   default = ""
-}
-
-# GCP
-variable "gcp_project" {
-  type    = string
-  default = ""
-}
-
-variable "gcp_region" {
-  type    = string
-  default = "asia-southeast1"
-}
-
-variable "subnet_cidr" {
-  type    = string
-  default = "10.0.1.0/24"
 }
