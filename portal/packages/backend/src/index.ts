@@ -7,6 +7,8 @@
  */
 
 import { createBackend } from '@backstage/backend-defaults';
+// Custom action run:script (chạy new-project.sh của iac-platform)
+import { scaffolderRunScriptModule } from './scaffolder/runScript';
 
 const backend = createBackend();
 
@@ -19,6 +21,7 @@ backend.add(import('@backstage/plugin-scaffolder-backend-module-github'));
 backend.add(
   import('@backstage/plugin-scaffolder-backend-module-notifications'),
 );
+backend.add(scaffolderRunScriptModule);
 
 // techdocs plugin
 backend.add(import('@backstage/plugin-techdocs-backend'));
@@ -69,4 +72,5 @@ backend.add(import('@backstage/plugin-signals-backend'));
 // mcp actions plugin
 backend.add(import('@backstage/plugin-mcp-actions-backend'));
 
+backend.add(import('@internal/backstage-plugin-projects-backend'));
 backend.start();

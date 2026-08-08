@@ -51,9 +51,9 @@ backend:
 integrations:
   github:
     - host: github.com
-      # This is a Personal Access Token or PAT from GitHub. You can find out how to generate this token, and more information
-      # about setting up the GitHub integration here: https://backstage.io/docs/integrations/github/locations#configuration
-      token: ${GITHUB_TOKEN}
+      # Token tùy chọn — chỉ cần khi push/read private repo.
+      # Bỏ để tránh lỗi "empty-string" khi chưa set GITHUB_TOKEN (quản lý project qua DB).
+      # token: ${GITHUB_TOKEN}
     ### Example for how to add your GitHub Enterprise instance using the API:
     # - host: ghe.example.net
     #   apiBaseUrl: https://ghe.example.net/api/v3

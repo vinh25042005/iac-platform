@@ -38,37 +38,61 @@ spec:
           uniqueItems: true
 
   steps:
-    # Bước 1: clone repo iac-platform về workspace (để chạy script + commit)
-    - id: fetch-template
-      name: Clone iac-platform
-      action: fetch:plain
-      input:
-        url: https://github.com/vinh25042005/iac-platform.git
-
-    # Bước 2: chạy new-project.sh với project name + envs
-    - id: run-generator
-      name: Run new-project.sh
-      action: run:command
-      input:
-        path: scripts
-        command: bash
-        args:
-          - -c
-          - 'ENVS="${{ parameters.envs | join(" ") }}" ./new-project.sh ${{ parameters.projectName }} && cat ${{ parameters.projectName }}.log || true'
-
-    # Bước 3: commit + push project scaffold lên GitHub
-    - id: commit
-      name: Commit & Push
-      action: run:command
+    # Bước 1: git clone repo iac-platform (GIỮ .git → push được lên GitHub).
+    #   Dùng GITHUB_TOKEN từ env của backend (không nhúng vào command → không lộ log).
+    #   Token qua credential.helper store (file cục bộ, xoá sau khi clone).
+    - id: clone
+      name: Clone iac-platform (git)
+      action: run:script
       input:
         path: .
+        useShell: true
         command: bash
         args:
           - -c
           - |
+            set -e
+            git init -q
+            git remote add origin https://github.com/vinh25042005/iac-platform.git
+            printf 'https://x-access-token:%s@github.com\n' "$GITHUB_TOKEN" > .git-credentials
+            git config credential.helper 'store --file=.git-credentials'
+            git fetch origin main --depth 1
+            git checkout -b main FETCH_HEAD
+            rm -f .git-credentials
+
+    # Bước 2: chạy new-project.sh với project name + envs (custom action run:script)
+    #   Truyền ENVS qua field env (không nhúng vào command → tránh lỗi mất quotes)
+    - id: run-generator
+      name: Run new-project.sh
+      action: run:script
+      input:
+        path: .
+        command: ./scripts/new-project.sh
+        args:
+          - ${{ parameters.projectName }}
+        env:
+          ENVS: ${{ parameters.envs | join(' ') }}
+
+    # Bước 3: commit + push project scaffold lên GitHub (dùng GITHUB_TOKEN từ env)
+    - id: commit
+      name: Commit & Push
+      action: run:script
+      input:
+        path: .
+        useShell: true
+        command: bash
+        args:
+          - -c
+          - |
+            set -e
+            git config user.name "backstage"
+            git config user.email "backstage@iac-platform.local"
+            printf 'https://x-access-token:%s@github.com\n' "$GITHUB_TOKEN" > .git-credentials
+            git config credential.helper 'store --file=.git-credentials'
             git add -A
-            git -c user.name="backstage" -c user.email="backstage@iac-platform.local" commit -m "project: create ${{ parameters.projectName }} (via Backstage)" || true
-            git push origin HEAD || true
+            git commit -m "project: create ${{ parameters.projectName }} (via Backstage)" || true
+            git push origin main
+            rm -f .git-credentials
 
   output:
     links:
