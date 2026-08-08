@@ -8,10 +8,9 @@ import {
   Typography,
   CircularProgress,
   Box,
-  Alert,
 } from '@material-ui/core';
 import { Header, Container } from '@backstage/ui';
-import { useProjectsApi, JenkinsInstance } from '../api';
+import { useProjectsApi, JenkinsInstance } from '../../api';
 
 interface FormState {
   name: string;
@@ -114,8 +113,8 @@ export const CreateProjectPage = ({ onCreated }: { onCreated?: () => void }) => 
           </Typography>
 
           {error && (
-            <Box mb={2}>
-              <Alert severity="error">{error}</Alert>
+            <Box mb={2} p={2} style={{ background: '#fdecea', borderRadius: 4 }}>
+              <Typography color="error">{error}</Typography>
             </Box>
           )}
 

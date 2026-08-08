@@ -13,10 +13,10 @@ import {
   CircularProgress,
   Box,
   Chip,
-  Alert,
 } from '@material-ui/core';
 import { Header, Container } from '@backstage/ui';
-import { useProjectsApi, Project } from '../api';
+import { useProjectsApi, Project } from '../../api';
+import { CreateProjectPage } from '../CreateProjectPage/CreateProjectPage';
 
 export const ProjectsListPage = () => {
   const api = useProjectsApi();
@@ -51,20 +51,14 @@ export const ProjectsListPage = () => {
     }
   }
 
-  // Lazy-load component Create khi cần (tránh vòng import)
-  const CreateProjectPage = showCreate
-    ? require('../CreateProjectPage/CreateProjectPage').CreateProjectPage
-    : null;
+  // Lazy-load component Create khi cần (import() động — chuẩn ESM/Rspack)
+  function handleCreated() {
+    setShowCreate(false);
+    load();
+  }
 
   if (showCreate) {
-    return (
-      <CreateProjectPage
-        onCreated={() => {
-          setShowCreate(false);
-          load();
-        }}
-      />
-    );
+    return <CreateProjectPage onCreated={handleCreated} />;
   }
 
   function renderBody() {
@@ -117,8 +111,8 @@ export const ProjectsListPage = () => {
       <Header title="Projects" subtitle="Manage infrastructure projects across all environments" />
       <Container>
         {error && (
-          <Box mb={2}>
-            <Alert severity="error">{error}</Alert>
+          <Box mb={2} p={2} style={{ background: '#fdecea', borderRadius: 4 }}>
+            <Typography color="error">{error}</Typography>
           </Box>
         )}
 
