@@ -9,6 +9,7 @@ export interface Project {
   kickoffDate: string;
   jiraKey: string;
   jenkinsInstance: string;
+  keyName: string;
   status: string;
 }
 

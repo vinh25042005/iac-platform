@@ -26,6 +26,7 @@ export async function createRouter({
     kickoffDate: z.string().optional().default(''),
     jiraKey: z.string().optional().default(''),
     jenkinsInstance: z.string().optional().default(''),
+    keyName: z.string().optional().default('techshop-key'),
     status: z.enum(['active', 'archived']).optional().default('active'),
   });
 
@@ -53,7 +54,7 @@ export async function createRouter({
     let generatedFiles: string[] = [];
     let generateError: string | undefined;
     try {
-      generatedFiles = await iac.generate(created.slug);
+      generatedFiles = await iac.generate(created.slug, undefined, parsed.data.keyName);
     } catch (e: any) {
       generateError = e.message;
     }

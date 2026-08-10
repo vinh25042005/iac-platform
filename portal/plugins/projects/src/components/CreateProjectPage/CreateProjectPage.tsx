@@ -19,6 +19,7 @@ interface FormState {
   kickoffDate: string;
   jiraKey: string;
   jenkinsInstance: string;
+  keyName: string;
   status: string;
 }
 
@@ -29,6 +30,7 @@ const emptyForm: FormState = {
   kickoffDate: '',
   jiraKey: '',
   jenkinsInstance: '',
+  keyName: 'techshop-key',
   status: 'active',
 };
 
@@ -142,6 +144,15 @@ export const CreateProjectPage = ({ onCreated }: { onCreated?: () => void }) => 
                 fullWidth
                 value={form.owner}
                 onChange={set('owner')}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="AWS Key Pair"
+                fullWidth
+                value={form.keyName}
+                onChange={set('keyName')}
+                helperText="EC2 key pair CÓ THẬT trên AWS (VD: techshop-key)"
               />
             </Grid>
             <Grid item xs={12} sm={6}>

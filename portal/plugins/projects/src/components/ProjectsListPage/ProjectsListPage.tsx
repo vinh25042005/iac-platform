@@ -13,6 +13,8 @@ import {
   CircularProgress,
   Box,
   Chip,
+  MenuItem,
+  Select,
 } from '@material-ui/core';
 import { Header, Container } from '@backstage/ui';
 import { useProjectsApi, Project } from '../../api';
@@ -26,6 +28,7 @@ export const ProjectsListPage = () => {
   const [error, setError] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [iaState, setIaState] = useState<Record<string, { loading: boolean; msg: string }>>({});
+  const [applyEnv, setApplyEnv] = useState<Record<string, string>>({});
   const [applyTarget, setApplyTarget] = useState<{ id: string; name: string; env: string } | null>(null);
 
   async function load() {
@@ -128,11 +131,29 @@ export const ProjectsListPage = () => {
               >
                 {iaState[p.id]?.loading ? '…' : 'IaC'}
               </Button>
+              <Select
+                size="small"
+                value={applyEnv[p.id] ?? 'dev'}
+                onChange={e =>
+                  setApplyEnv(s => ({ ...s, [p.id]: String(e.target.value) }))
+                }
+                style={{ minWidth: 70, marginRight: 4 }}
+              >
+                <MenuItem value="dev">dev</MenuItem>
+                <MenuItem value="stg">stg</MenuItem>
+                <MenuItem value="prd">prd</MenuItem>
+              </Select>
               <Button
                 size="small"
                 variant="contained"
                 color="primary"
-                onClick={() => setApplyTarget({ id: p.id, name: p.name, env: 'dev' })}
+                onClick={() =>
+                  setApplyTarget({
+                    id: p.id,
+                    name: p.name,
+                    env: applyEnv[p.id] ?? 'dev',
+                  })
+                }
               >
                 Apply
               </Button>

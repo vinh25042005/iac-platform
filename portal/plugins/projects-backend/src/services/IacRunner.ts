@@ -39,16 +39,19 @@ export class IacRunner {
   async generate(
     slug: string,
     envs: string[] = DEFAULT_ENVS,
+    keyName = '',
   ): Promise<string[]> {
     const script = path.join(this.#iacRoot, 'scripts', 'new-project.sh');
     if (!fs.existsSync(script)) {
       throw new NotFoundError(`Không tìm thấy ${script}`);
     }
-    this.#logger.info(`iac: generate project "${slug}" envs=${envs.join(',')}`);
+    this.#logger.info(
+      `iac: generate project "${slug}" envs=${envs.join(',')} key=${keyName || '(default)'}`,
+    );
     const out = await this.#run(
       'bash',
       [script, slug],
-      { env: { ...process.env, ENVS: envs.join(' ') } },
+      { env: { ...process.env, ENVS: envs.join(' '), KEY_NAME: keyName } },
       60_000,
     );
     this.#logger.info(`iac: generate ${slug} OK\n${out}`);

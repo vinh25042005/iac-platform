@@ -18,6 +18,9 @@ STATE_BUCKET="${STATE_BUCKET:-iac-platform-state}"
 REGION="${AWS_REGION:-ap-southeast-1}"
 ORIGIN="${GIT_ORIGIN:-https://github.com/<your-org>/iac-platform.git}"
 ENVS="${ENVS:-dev stg prd}"
+# Key pair AWS — Backstage truyền qua env KEY_NAME (VD: techshop-key).
+# Nếu không truyền, fallback về <project>-key (giữ hành vi cũ).
+KEY_NAME="${KEY_NAME:-$PROJECT-key}"
 TEMPLATE="$ROOT/terraform/environments/_template"
 
 [ -d "$TEMPLATE" ] || { echo "❌ Không thấy $TEMPLATE"; exit 1; }
@@ -36,7 +39,7 @@ env     = "$env"
 region  = "$REGION"
 
 # ── Cụm kubeadm (sửa theo ý bạn) ──
-key_name      = "$PROJECT-key"   # ← AWS key pair đã tạo
+key_name      = "$KEY_NAME"   # ← AWS key pair đã tạo (từ Backstage / mặc định <project>-key)
 instance_type = "t3.small"
 node_count    = 3                # ← điền số node (1 master + N-1 worker)
 EOF

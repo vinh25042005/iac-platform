@@ -17,6 +17,7 @@ export interface Project {
   kickoffDate: string;
   jiraKey: string;
   jenkinsInstance: string;
+  keyName: string;
   status: string; // active | archived
 }
 
@@ -62,7 +63,16 @@ export class ProjectStoreService {
         table.string('kickoffDate');
         table.string('jiraKey');
         table.string('jenkinsInstance');
+        table.string('keyName');
         table.string('status').notNullable().defaultTo('active');
+      });
+    }
+
+    // Migration: thêm cột keyName cho bảng cũ (chưa có)
+    const hasKeyName = await client.schema.hasColumn(TABLE_PROJECTS, 'keyName');
+    if (!hasKeyName) {
+      await client.schema.alterTable(TABLE_PROJECTS, table => {
+        table.string('keyName');
       });
     }
 
@@ -100,6 +110,7 @@ export class ProjectStoreService {
       kickoffDate: row.kickoffDate ?? '',
       jiraKey: row.jiraKey ?? '',
       jenkinsInstance: row.jenkinsInstance ?? '',
+      keyName: row.keyName ?? '',
       status: row.status,
     };
   }
@@ -128,6 +139,7 @@ export class ProjectStoreService {
       kickoffDate: p.kickoffDate,
       jiraKey: p.jiraKey,
       jenkinsInstance: p.jenkinsInstance,
+      keyName: p.keyName,
       status: p.status || 'active',
     });
     return this.getProject(id);
@@ -146,6 +158,7 @@ export class ProjectStoreService {
         kickoffDate: p.kickoffDate ?? existing.kickoffDate,
         jiraKey: p.jiraKey ?? existing.jiraKey,
         jenkinsInstance: p.jenkinsInstance ?? existing.jenkinsInstance,
+        keyName: p.keyName ?? existing.keyName,
         status: p.status ?? existing.status,
       })
       .where('id', '=', id);
