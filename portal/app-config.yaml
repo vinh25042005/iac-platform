@@ -39,7 +39,10 @@ backend:
   # The production database configuration is stored in app-config.production.yaml
   database:
     client: better-sqlite3
-    connection: ':memory:'
+    # SQLite FILE (KHÔNG dùng :memory:) — để dữ liệu project tồn tại qua restart.
+    # Backstage tạo 1 file riêng cho mỗi plugin trong thư mục .data
+    connection:
+      directory: './.data'
   # see https://backstage.io/docs/ai/mcp-actions#actions-configuration for more details
   actions:
     pluginSources:
