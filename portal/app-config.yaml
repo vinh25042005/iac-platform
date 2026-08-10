@@ -122,12 +122,6 @@ catalog:
       rules:
         - allow: [User, Group]
 
-    # ── iac-platform: template tạo project (giống CatalogHub Create Project) ──
-    - type: file
-      target: ../../templates/iac-platform-project/template.yaml
-      rules:
-        - allow: [Template]
-
     # ── iac-platform: catalog các project + env (giống CatalogHub Projects list) ──
     - type: file
       target: ../../catalog/iac-platform.yaml
