@@ -165,23 +165,48 @@ resource "null_resource" "ansible" {
       set -e
       KEY=~/.ssh/${var.key_name}.pem
       INVENTORY="${path.root}/../../../../ansible/inventories/${var.project}-${var.env}.ini"
-      MASTER_IP=$(grep -oP '(?<=ansible_host=)[0-9.]+' "$INVENTORY" | head -1)
+      # Tất cả IP công khai (master) — worker private không SSH trực tiếp từ local
+      NODES=$(grep -oP 'ansible_host=\K[0-9.]+' "$INVENTORY" | grep -v '^10\.' | sort -u)
 
       chmod 600 "$KEY"
 
-      # Chờ master SSH-ready
-      for i in $(seq 1 30); do
-        if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -i "$KEY" ubuntu@$MASTER_IP "exit" 2>/dev/null; then
-          break
+      # Chờ TẤT CẢ node public SSH-ready (master) — như deploy-web
+      echo ">>> Waiting for all public nodes to be SSH-ready..."
+      FAILED=0
+      for IP in $NODES; do
+        echo "  Waiting for $IP:22 ..."
+        SUCCESS=0
+        for i in $(seq 1 30); do
+          if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -i "$KEY" ubuntu@$IP "exit" 2>/dev/null; then
+            SUCCESS=1
+            break
+          fi
+          echo "    retry $i/30..."
+          sleep 10
+        done
+        if [ "$SUCCESS" -eq 0 ]; then
+          echo "  ERROR: $IP not reachable after 30 retries!"
+          FAILED=1
         fi
-        echo "  chờ master $MASTER_IP (retry $i/30)..."
-        sleep 10
       done
+      if [ "$FAILED" -eq 1 ]; then
+        echo ">>> Some nodes not reachable! Aborting."
+        exit 1
+      fi
+      echo ">>> All nodes ready!"
+
+      # BẮT BUỘC: khởi động ssh-agent + add key để ForwardAgent=yes hoạt động
+      # (worker là private subnet, đi qua ProxyJump master — thiếu agent → Permission denied)
+      echo ">>> Starting SSH agent..."
+      eval $(ssh-agent -s)
+      ssh-add "$KEY"
 
       echo ">>> Chạy Ansible (retry 3 lần)..."
-      cd "${path.root}/../../../../ansible"
+      # cd vào đúng thư mục ansible/ để Ansible load group_vars/all.yml
+      # (thiếu bước này → 'k8s_version' undefined)
+      cd "$(dirname "$INVENTORY")"
       for i in $(seq 1 3); do
-        if timeout 900 ansible-playbook -i inventories/${var.project}-${var.env}.ini \
+        if timeout 900 ansible-playbook -i ${var.project}-${var.env}.ini \
             playbooks/k8s-cluster.yml -e project=${var.project} -e env=${var.env}; then
           echo ">>> Ansible OK"
           exit 0

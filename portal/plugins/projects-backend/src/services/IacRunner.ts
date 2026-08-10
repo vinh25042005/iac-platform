@@ -158,6 +158,70 @@ export class IacRunner {
     return job;
   }
 
+  /**
+   * Xoá toàn bộ file IaC sinh ra cho 1 project (gọi khi xoá project trên UI).
+   * Xoá: terraform/environments/<slug>/, helm/_base/values/<slug>/,
+   *      argocd/apps/<slug>-*.yaml, ansible/inventories/<slug>-*.ini,
+   *      và gỡ khỏi projects.txt registry.
+   * Slug đã được sanitize (a-z0-9-) ở router nên an toàn cho path.
+   */
+  removeProjectFiles(slug: string): string[] {
+    const removed: string[] = [];
+
+    // ── Terraform environments ──
+    const tfDir = path.join(this.#iacRoot, 'terraform', 'environments', slug);
+    if (fs.existsSync(tfDir)) {
+      fs.rmSync(tfDir, { recursive: true, force: true });
+      removed.push(`terraform/environments/${slug}/`);
+      this.#logger.info(`iac: removed ${tfDir}`);
+    }
+
+    // ── Helm values ──
+    const helmDir = path.join(this.#iacRoot, 'helm', '_base', 'values', slug);
+    if (fs.existsSync(helmDir)) {
+      fs.rmSync(helmDir, { recursive: true, force: true });
+      removed.push(`helm/_base/values/${slug}/`);
+      this.#logger.info(`iac: removed ${helmDir}`);
+    }
+
+    // ── ArgoCD apps: <slug>-<env>.yaml ──
+    const appsDir = path.join(this.#iacRoot, 'argocd', 'apps');
+    if (fs.existsSync(appsDir)) {
+      for (const f of fs.readdirSync(appsDir)) {
+        if (f.startsWith(`${slug}-`) && f.endsWith('.yaml')) {
+          fs.rmSync(path.join(appsDir, f), { force: true });
+          removed.push(`argocd/apps/${f}`);
+          this.#logger.info(`iac: removed argocd/apps/${f}`);
+        }
+      }
+    }
+
+    // ── Ansible inventories: <slug>-<env>.ini ──
+    const invDir = path.join(this.#iacRoot, 'ansible', 'inventories');
+    if (fs.existsSync(invDir)) {
+      for (const f of fs.readdirSync(invDir)) {
+        if (f.startsWith(`${slug}-`) && f.endsWith('.ini')) {
+          fs.rmSync(path.join(invDir, f), { force: true });
+          removed.push(`ansible/inventories/${f}`);
+          this.#logger.info(`iac: removed ansible/inventories/${f}`);
+        }
+      }
+    }
+
+    // ── Registry projects.txt: gỡ dòng slug ──
+    const registry = path.join(this.#iacRoot, 'projects.txt');
+    if (fs.existsSync(registry)) {
+      const lines = fs
+        .readFileSync(registry, 'utf8')
+        .split('\n')
+        .filter(l => l.trim() !== slug);
+      fs.writeFileSync(registry, lines.join('\n'));
+      this.#logger.info(`iac: gỡ '${slug}' khỏi projects.txt`);
+    }
+
+    return removed;
+  }
+
   #run(
     cmd: string,
     args: string[],

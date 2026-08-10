@@ -125,8 +125,18 @@ export async function createRouter({
 
   router.delete('/projects/:id', async (req, res) => {
     await httpAuth.credentials(req, { allow: ['user'] });
+    const project = await store.getProject(req.params.id);
+    // Xoá file IaC sinh ra trên máy (terraform/helm/argocd/ansible + registry)
+    // — KHÔNG xoá hạ tầng AWS (bấm Destroy riêng nếu muốn)
+    let removedFiles: string[] = [];
+    let cleanupError: string | undefined;
+    try {
+      removedFiles = iac.removeProjectFiles(project.slug);
+    } catch (e: any) {
+      cleanupError = e.message;
+    }
     await store.deleteProject(req.params.id);
-    res.status(204).end();
+    res.status(204).json({ removedFiles, cleanupError });
   });
 
   // ── Jenkins instances ──
