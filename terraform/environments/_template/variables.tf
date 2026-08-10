@@ -37,9 +37,11 @@ variable "azs" {
 }
 
 # ⚠️ Security (least privilege): SSH chỉ từ bastion/VPN — mặc định trống (không mở 22)
+# LƯU Ý: Ansible chạy local-exec SSH vào master. Nếu để trống → KHÔNG SSH được →
+# job treo ở "chờ master ...". Set CIDR (VD IP nhà bạn/0.0.0.0/0) nếu cần.
 variable "allowed_ssh_cidrs" {
   type    = list(string)
-  default = []
+  default = ["0.0.0.0/0"]
 }
 
 # K8s API + Rancher — nên giới hạn theo IP admin nếu có thể
