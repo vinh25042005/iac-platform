@@ -17,10 +17,12 @@ export interface JenkinsInstance {
 }
 
 // Wrapper nhỏ quanh plugin://projects API (backend plugin proxy qua fetchApiRef)
+// LƯU Ý: plugin://<id> resolve theo pluginId của BACKEND plugin (projects-backend),
+//   KHÔNG phải tên frontend plugin. Sai id → mọi request trượt (404) → UI không chạy.
 export function useProjectsApi() {
   const { fetch } = useApi(fetchApiRef);
 
-  const base = 'plugin://projects';
+  const base = 'plugin://projects-backend';
 
   async function listProjects(): Promise<Project[]> {
     const r = await fetch(`${base}/projects`);
