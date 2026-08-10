@@ -21,12 +21,28 @@ export async function createRouter({
   // ── Project schema ──
   const projectSchema = z.object({
     name: z.string().min(1),
-    slug: z.string().min(1),
+    // Slug bắt buộc chuẩn hoá: lowercase + bỏ space/ký tự lạ, chỉ giữ a-z0-9-
+    // (chặn lỗi "only alphanumeric characters and hyphens allowed in name")
+    slug: z
+      .string()
+      .min(1)
+      .transform(s =>
+        s
+          .toLowerCase()
+          .trim()
+          .replace(/[^a-z0-9-]+/g, '-')
+          .replace(/^-+|-+$/g, ''),
+      )
+      .refine(s => s.length > 0, { message: 'Slug không hợp lệ sau khi chuẩn hoá' }),
     owner: z.string().min(1),
     kickoffDate: z.string().optional().default(''),
     jiraKey: z.string().optional().default(''),
     jenkinsInstance: z.string().optional().default(''),
-    keyName: z.string().optional().default('techshop-key'),
+    keyName: z
+      .string()
+      .default('techshop-key')
+      .transform(s => s.trim())
+      .refine(s => s.length > 0, { message: 'keyName không được để trống' }),
     status: z.enum(['active', 'archived']).optional().default('active'),
   });
 

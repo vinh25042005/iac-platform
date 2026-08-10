@@ -12,7 +12,10 @@
 # =============================================================================
 set -euo pipefail
 
-PROJECT="${1:?usage: new-project.sh <PROJECT>}"
+PROJECT_RAW="${1:?usage: new-project.sh <PROJECT>}"
+# Chuẩn hoá tên project: lowercase, bỏ space/ký tự lạ, chỉ giữ a-z0-9-
+PROJECT="$(printf '%s' "$PROJECT_RAW" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9-' '-')"
+[ -n "$PROJECT" ] || { echo "❌ Tên project không hợp lệ sau khi chuẩn hoá: '$PROJECT_RAW'"; exit 1; }
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 STATE_BUCKET="${STATE_BUCKET:-iac-platform-state}"
 REGION="${AWS_REGION:-ap-southeast-1}"

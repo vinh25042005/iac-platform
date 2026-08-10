@@ -58,8 +58,15 @@ export const CreateProjectPage = ({ onCreated }: { onCreated?: () => void }) => 
       .finally(() => setJenkinsLoaded(true));
   }, [api]);  
 
-  const set = (k: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm(f => ({ ...f, [k]: e.target.value }));
+  const set = (k: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (k === 'slug') {
+      // Tự động chuẩn hoá slug ngay khi gõ: lowercase + space→dash + chỉ giữ a-z0-9-
+      const v = e.target.value.toLowerCase().trim().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
+      setForm(f => ({ ...f, slug: v }));
+    } else {
+      setForm(f => ({ ...f, [k]: e.target.value }));
+    }
+  };
 
   async function handleCreateJenkins() {
     if (!newJenkinsName.trim() || !newJenkinsUrl.trim()) {
@@ -86,6 +93,13 @@ export const CreateProjectPage = ({ onCreated }: { onCreated?: () => void }) => 
     setError('');
     if (!form.name.trim() || !form.slug.trim() || !form.owner.trim()) {
       setError('Vui lòng điền đủ: Project Name, Slug, Owner');
+      return;
+    }
+    // Đảm bảo slug hợp lệ (không space, không ký tự lạ) — chặn từ phía UI
+    const cleanSlug = form.slug.toLowerCase().trim().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
+    if (cleanSlug !== form.slug) {
+      setForm(f => ({ ...f, slug: cleanSlug }));
+      setError('Slug đã được chuẩn hoá tự động (bỏ space/ký tự đặc biệt)');
       return;
     }
     if (!form.jenkinsInstance) {
