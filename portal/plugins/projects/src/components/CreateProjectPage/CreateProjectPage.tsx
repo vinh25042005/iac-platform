@@ -125,7 +125,6 @@ export const CreateProjectPage = ({ onCreated }: { onCreated?: () => void }) => 
                 fullWidth
                 value={form.name}
                 onChange={set('name')}
-                placeholder="VD: BNF Project"
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -134,7 +133,6 @@ export const CreateProjectPage = ({ onCreated }: { onCreated?: () => void }) => 
                 fullWidth
                 value={form.slug}
                 onChange={set('slug')}
-                placeholder="VD: bnf — dùng cho namespace"
               />
             </Grid>
 
@@ -144,27 +142,6 @@ export const CreateProjectPage = ({ onCreated }: { onCreated?: () => void }) => 
                 fullWidth
                 value={form.owner}
                 onChange={set('owner')}
-                placeholder="VD: Bui Tien Thanh (Escanor)"
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                label="Kickoff Date"
-                type="date"
-                fullWidth
-                value={form.kickoffDate}
-                onChange={set('kickoffDate')}
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
-
-            <Grid item xs={12} sm={6}>
-              <TextField
-                label="Jira Project Key"
-                fullWidth
-                value={form.jiraKey}
-                onChange={set('jiraKey')}
-                placeholder="VD: BNFDI6"
               />
             </Grid>
             <Grid item xs={12} sm={6}>

@@ -65,7 +65,7 @@ export const ProjectsListPage = () => {
     if (loading) {
       return (
         <TableRow>
-          <TableCell colSpan={8} align="center">
+          <TableCell colSpan={6} align="center">
             <CircularProgress size={24} />
           </TableCell>
         </TableRow>
@@ -74,7 +74,7 @@ export const ProjectsListPage = () => {
     if (projects.length === 0) {
       return (
         <TableRow>
-          <TableCell colSpan={8} align="center">
+          <TableCell colSpan={6} align="center">
             <Typography color="textSecondary">
               Chưa có project nào — bấm "+ Add Project" để tạo.
             </Typography>
@@ -87,8 +87,6 @@ export const ProjectsListPage = () => {
         <TableCell>{p.id}</TableCell>
         <TableCell>{p.name}</TableCell>
         <TableCell>{p.owner}</TableCell>
-        <TableCell>{p.kickoffDate}</TableCell>
-        <TableCell>{p.jiraKey}</TableCell>
         <TableCell>{p.jenkinsInstance}</TableCell>
         <TableCell>
           <Chip
@@ -137,8 +135,6 @@ export const ProjectsListPage = () => {
                 <TableCell>ID</TableCell>
                 <TableCell>Name</TableCell>
                 <TableCell>Owner</TableCell>
-                <TableCell>Kickoff date</TableCell>
-                <TableCell>Jira</TableCell>
                 <TableCell>Jenkins</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell>Option</TableCell>
