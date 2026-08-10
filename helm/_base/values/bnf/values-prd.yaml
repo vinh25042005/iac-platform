@@ -1,0 +1,10 @@
+env: prd
+backend:
+  replicas: 3
+frontend:
+  replicas: 3
+config:
+  nodeEnv: production
+hpa:
+  minReplicas: 3
+  maxReplicas: 8

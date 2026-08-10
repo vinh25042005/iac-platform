@@ -27,6 +27,7 @@ export interface JenkinsInstance {
 
 const TABLE_PROJECTS = 'projects';
 const TABLE_JENKINS = 'jenkins_instances';
+const TABLE_IAC = 'iac_artifacts';
 
 export class ProjectStoreService {
   readonly #logger: LoggerService;
@@ -70,6 +71,20 @@ export class ProjectStoreService {
       await client.schema.createTable(TABLE_JENKINS, table => {
         table.string('name').primary();
         table.string('url').notNullable();
+      });
+    }
+
+    // iac_artifacts — file IaC sinh ra cho từng project (dạng text, không ghi repo)
+    const hasIac = await client.schema.hasTable(TABLE_IAC);
+    if (!hasIac) {
+      await client.schema.createTable(TABLE_IAC, table => {
+        table.increments('id').primary();
+        table.string('project_id').notNullable();
+        table.string('env'); // dev | stg | prd — file dùng chung để trống
+        table.string('path').notNullable(); // VD: terraform/environments/<slug>/dev/main.tf
+        table.text('content').notNullable();
+        table.timestamp('updated_at').defaultTo(client.fn.now());
+        table.index(['project_id']);
       });
     }
 
@@ -149,6 +164,36 @@ export class ProjectStoreService {
   async createJenkins(j: JenkinsInstance): Promise<JenkinsInstance> {
     await this.#client(TABLE_JENKINS).insert({ name: j.name, url: j.url });
     return j;
+  }
+
+  // ── IAC artifacts — file IaC sinh cho project (lưu DB, không ghi repo) ──
+  async listIac(projectId: string): Promise<any[]> {
+    const rows = await this.#client(TABLE_IAC)
+      .select('*')
+      .where('project_id', '=', projectId)
+      .orderBy('path', 'asc');
+    return rows.map(r => ({
+      id: r.id,
+      env: r.env ?? '',
+      path: r.path,
+      content: r.content,
+    }));
+  }
+
+  async saveIac(
+    projectId: string,
+    files: { env?: string; path: string; content: string }[],
+  ): Promise<void> {
+    // Ghi đè toàn bộ: xoá cũ của project rồi insert mới
+    await this.#client(TABLE_IAC).where('project_id', '=', projectId).delete();
+    for (const f of files) {
+      await this.#client(TABLE_IAC).insert({
+        project_id: projectId,
+        env: f.env ?? null,
+        path: f.path,
+        content: f.content,
+      });
+    }
   }
 }
 

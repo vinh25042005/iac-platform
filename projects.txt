@@ -1,2 +1,4 @@
 # Registry các project — thêm project mới bằng: scripts/new-project.sh <PROJECT>
 # Định dạng: PROJECT (AWS-only)
+bnf
+bnf

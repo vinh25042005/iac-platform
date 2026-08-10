@@ -5,7 +5,7 @@
 # =============================================================================
 set -euo pipefail
 
-BUCKET="${1:-iac-platform-state}"
+BUCKET="${1:-iac-platform-state-790400775134}"
 REGION="${AWS_REGION:-ap-southeast-1}"
 
 if aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then

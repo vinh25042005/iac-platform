@@ -54,7 +54,7 @@ export const CreateProjectPage = ({ onCreated }: { onCreated?: () => void }) => 
       })
       .catch(e => setError(`Không tải được danh sách Jenkins: ${e.message}`))
       .finally(() => setJenkinsLoaded(true));
-  }, [api]);
+  }, [api]);  
 
   const set = (k: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }));

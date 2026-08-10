@@ -4,13 +4,16 @@ import { z } from 'zod/v3';
 import express from 'express';
 import Router from 'express-promise-router';
 import { ProjectStoreService } from './services/ProjectStoreService';
+import { IacRunner } from './services/IacRunner';
 
 export async function createRouter({
   httpAuth,
   store,
+  iac,
 }: {
   httpAuth: HttpAuthService;
   store: ProjectStoreService;
+  iac: IacRunner;
 }): Promise<express.Router> {
   const router = Router();
   router.use(express.json());
@@ -45,7 +48,41 @@ export async function createRouter({
     if (!parsed.success) throw new InputError(parsed.error.toString());
     await httpAuth.credentials(req, { allow: ['user'] });
     const created = await store.createProject(parsed.data);
-    res.status(201).json(created);
+
+    // Tự sinh IaC vào thư mục iac-platform (new-project.sh — local, không push)
+    let generatedFiles: string[] = [];
+    let generateError: string | undefined;
+    try {
+      generatedFiles = await iac.generate(created.slug);
+    } catch (e: any) {
+      generateError = e.message;
+    }
+
+    res.status(201).json({ ...created, generatedFiles, generateError });
+  });
+
+  // ── Generate IaC thủ công (chạy lại new-project.sh) ──
+  router.post('/projects/:id/generate', async (req, res) => {
+    await httpAuth.credentials(req, { allow: ['user'] });
+    const project = await store.getProject(req.params.id);
+    const files = await iac.generate(project.slug);
+    res.json({ ok: true, files });
+  });
+
+  // ── Apply: chạy terraform apply cho 1 env (job nền, poll log) ──
+  router.post('/projects/:id/apply', async (req, res) => {
+    const parsed = z
+      .object({ env: z.string().min(1) })
+      .safeParse(req.body);
+    if (!parsed.success) throw new InputError(parsed.error.toString());
+    await httpAuth.credentials(req, { allow: ['user'] });
+    const project = await store.getProject(req.params.id);
+    const jobId = iac.startApply(project.slug, parsed.data.env);
+    res.status(201).json({ jobId });
+  });
+
+  router.get('/apply/:jobId', async (req, res) => {
+    res.json(iac.getJob(req.params.jobId));
   });
 
   router.put('/projects/:id', async (req, res) => {

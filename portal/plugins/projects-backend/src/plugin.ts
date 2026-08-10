@@ -4,6 +4,7 @@ import {
 } from '@backstage/backend-plugin-api';
 import { createRouter } from './router';
 import { ProjectStoreService } from './services/ProjectStoreService';
+import { IacRunner, resolveIacRoot } from './services/IacRunner';
 
 /**
  * projectsBackendPlugin backend plugin
@@ -22,10 +23,12 @@ export const projectsBackendPlugin = createBackendPlugin({
       },
       async init({ httpAuth, httpRouter, logger, database }) {
         const store = await ProjectStoreService.create({ logger, database });
+        const iac = new IacRunner(logger, resolveIacRoot(logger));
         httpRouter.use(
           await createRouter({
             httpAuth,
             store,
+            iac,
           }),
         );
       },

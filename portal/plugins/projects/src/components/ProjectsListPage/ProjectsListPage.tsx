@@ -17,6 +17,7 @@ import {
 import { Header, Container } from '@backstage/ui';
 import { useProjectsApi, Project } from '../../api';
 import { CreateProjectPage } from '../CreateProjectPage/CreateProjectPage';
+import { ApplyLogDialog } from '../ApplyLogDialog/ApplyLogDialog';
 
 export const ProjectsListPage = () => {
   const api = useProjectsApi();
@@ -24,6 +25,8 @@ export const ProjectsListPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  const [iaState, setIaState] = useState<Record<string, { loading: boolean; msg: string }>>({});
+  const [applyTarget, setApplyTarget] = useState<{ id: string; name: string; env: string } | null>(null);
 
   async function load() {
     setLoading(true);
@@ -57,6 +60,19 @@ export const ProjectsListPage = () => {
     load();
   }
 
+  async function handleGenerateIac(id: string) {
+    setIaState(s => ({ ...s, [id]: { loading: true, msg: '' } }));
+    try {
+      const files = await api.generateProject(id);
+      setIaState(s => ({
+        ...s,
+        [id]: { loading: false, msg: `✅ Đã sinh ${files.length} file IaC` },
+      }));
+    } catch (e: any) {
+      setIaState(s => ({ ...s, [id]: { loading: false, msg: `❌ ${e.message}` } }));
+    }
+  }
+
   if (showCreate) {
     return <CreateProjectPage onCreated={handleCreated} />;
   }
@@ -65,7 +81,7 @@ export const ProjectsListPage = () => {
     if (loading) {
       return (
         <TableRow>
-          <TableCell colSpan={6} align="center">
+          <TableCell colSpan={7} align="center">
             <CircularProgress size={24} />
           </TableCell>
         </TableRow>
@@ -74,7 +90,7 @@ export const ProjectsListPage = () => {
     if (projects.length === 0) {
       return (
         <TableRow>
-          <TableCell colSpan={6} align="center">
+          <TableCell colSpan={7} align="center">
             <Typography color="textSecondary">
               Chưa có project nào — bấm "+ Add Project" để tạo.
             </Typography>
@@ -99,6 +115,34 @@ export const ProjectsListPage = () => {
           <IconButton size="small" onClick={() => handleDelete(p.id)}>
             <Typography variant="body2">🗑</Typography>
           </IconButton>
+        </TableCell>
+        <TableCell>
+          <Box display="flex" flexDirection="column" alignItems="flex-start">
+            <Box display="flex">
+              <Button
+                size="small"
+                variant="outlined"
+                disabled={iaState[p.id]?.loading}
+                onClick={() => handleGenerateIac(p.id)}
+                style={{ marginRight: 4 }}
+              >
+                {iaState[p.id]?.loading ? '…' : 'IaC'}
+              </Button>
+              <Button
+                size="small"
+                variant="contained"
+                color="primary"
+                onClick={() => setApplyTarget({ id: p.id, name: p.name, env: 'dev' })}
+              >
+                Apply
+              </Button>
+            </Box>
+            {iaState[p.id]?.msg && (
+              <Typography variant="caption" color="textSecondary">
+                {iaState[p.id].msg}
+              </Typography>
+            )}
+          </Box>
         </TableCell>
       </TableRow>
     ));
@@ -137,13 +181,24 @@ export const ProjectsListPage = () => {
                 <TableCell>Owner</TableCell>
                 <TableCell>Jenkins</TableCell>
                 <TableCell>Status</TableCell>
-                <TableCell>Option</TableCell>
+                <TableCell>Delete</TableCell>
+                <TableCell>IaC / Apply</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>{renderBody()}</TableBody>
           </Table>
         </TableContainer>
       </Container>
+
+      {applyTarget && (
+        <ApplyLogDialog
+          open
+          projectId={applyTarget.id}
+          projectName={applyTarget.name}
+          env={applyTarget.env}
+          onClose={() => setApplyTarget(null)}
+        />
+      )}
     </>
   );
 };

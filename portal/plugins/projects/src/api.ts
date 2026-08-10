@@ -65,5 +65,44 @@ export function useProjectsApi() {
     return r.json();
   }
 
-  return { listProjects, createProject, deleteProject, listJenkins, createJenkins };
+  // ── IaC: sinh file + apply terraform ──
+  async function generateProject(id: string): Promise<string[]> {
+    const r = await fetch(`${base}/projects/${id}/generate`, { method: 'POST' });
+    if (!r.ok) throw new Error(`generateProject failed: ${r.status}`);
+    const data = await r.json();
+    return data.files ?? [];
+  }
+
+  async function applyProject(id: string, env: string): Promise<string> {
+    const r = await fetch(`${base}/projects/${id}/apply`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ env }),
+    });
+    if (!r.ok) throw new Error(`applyProject failed: ${r.status}`);
+    const data = await r.json();
+    return data.jobId;
+  }
+
+  async function getApplyJob(jobId: string): Promise<{
+    id: string;
+    status: string;
+    logs: string[];
+    exitCode?: number;
+  }> {
+    const r = await fetch(`${base}/apply/${jobId}`);
+    if (!r.ok) throw new Error(`getApplyJob failed: ${r.status}`);
+    return r.json();
+  }
+
+  return {
+    listProjects,
+    createProject,
+    deleteProject,
+    listJenkins,
+    createJenkins,
+    generateProject,
+    applyProject,
+    getApplyJob,
+  };
 }

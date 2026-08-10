@@ -11,7 +11,7 @@
 terraform {
   backend "s3" {
     bucket  = "iac-platform-state-790400775134"
-    key     = "KEY_PLACEHOLDER" # ← new-project.sh thay = <project>/<env>/terraform.tfstate
+    key     = "bnf/prd/terraform.tfstate" # ← new-project.sh thay = <project>/<env>/terraform.tfstate
     region  = "ap-southeast-1"
     encrypt = true
   }
