@@ -79,10 +79,12 @@ export async function createRouter({
   });
 
   // ── Generate IaC thủ công (chạy lại new-project.sh) ──
+  // LƯU Ý: phải truyền keyName của project — nếu không, new-project.sh fallback
+  // về <project>-key (key KHÔNG tồn tại trên AWS → lỗi InvalidKeyPair.NotFound)
   router.post('/projects/:id/generate', async (req, res) => {
     await httpAuth.credentials(req, { allow: ['user'] });
     const project = await store.getProject(req.params.id);
-    const files = await iac.generate(project.slug);
+    const files = await iac.generate(project.slug, undefined, project.keyName);
     res.json({ ok: true, files });
   });
 
