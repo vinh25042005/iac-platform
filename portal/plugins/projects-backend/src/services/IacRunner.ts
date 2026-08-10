@@ -102,6 +102,43 @@ export class IacRunner {
       ],
       { env: process.env },
     );
+    this.#wireJob(child, job, `apply ${slug}/${env}`);
+    return jobId;
+  }
+
+  /** Bắt đầu terraform destroy cho 1 env — trả jobId, log chạy nền. */
+  startDestroy(slug: string, env: string): string {
+    const dir = path.join(
+      this.#iacRoot,
+      'terraform',
+      'environments',
+      slug,
+      env,
+    );
+    if (!fs.existsSync(path.join(dir, 'main.tf'))) {
+      throw new NotFoundError(
+        `Chưa có main.tf tại ${dir} — hãy tạo project / bấm Generate IaC trước`,
+      );
+    }
+    const jobId = `destroy-${Date.now()}`;
+    const job: ApplyJob = { id: jobId, status: 'running', logs: [] };
+    this.#jobs.set(jobId, job);
+
+    this.#logger.info(`iac: destroy ${slug}/${env} bắt đầu (job ${jobId})`);
+    const child = spawn(
+      'bash',
+      [
+        '-c',
+        `cd "${dir}" && terraform init -input=false -no-color && terraform destroy -auto-approve -no-color`,
+      ],
+      { env: process.env },
+    );
+    this.#wireJob(child, job, `destroy ${slug}/${env}`);
+    return jobId;
+  }
+
+  /** Gắn pipe stdout/stderr + đóng job khi child process kết thúc. */
+  #wireJob(child: import('child_process').ChildProcess, job: ApplyJob, label: string) {
     child.stdout.on('data', d => {
       job.logs.push(String(d));
     });
@@ -111,11 +148,8 @@ export class IacRunner {
     child.on('close', code => {
       job.exitCode = code ?? undefined;
       job.status = code === 0 ? 'success' : 'error';
-      this.#logger.info(
-        `iac: apply ${slug}/${env} kết thúc status=${job.status} code=${code}`,
-      );
+      this.#logger.info(`iac: ${label} kết thúc status=${job.status} code=${code}`);
     });
-    return jobId;
   }
 
   getJob(id: string): ApplyJob {

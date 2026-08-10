@@ -100,6 +100,18 @@ export async function createRouter({
     res.status(201).json({ jobId });
   });
 
+  // ── Destroy: chạy terraform destroy cho 1 env (job nền, poll log) ──
+  router.post('/projects/:id/destroy', async (req, res) => {
+    const parsed = z
+      .object({ env: z.string().min(1) })
+      .safeParse(req.body);
+    if (!parsed.success) throw new InputError(parsed.error.toString());
+    await httpAuth.credentials(req, { allow: ['user'] });
+    const project = await store.getProject(req.params.id);
+    const jobId = iac.startDestroy(project.slug, parsed.data.env);
+    res.status(201).json({ jobId });
+  });
+
   router.get('/apply/:jobId', async (req, res) => {
     res.json(iac.getJob(req.params.jobId));
   });

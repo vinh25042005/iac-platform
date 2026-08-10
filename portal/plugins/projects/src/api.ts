@@ -89,6 +89,17 @@ export function useProjectsApi() {
         return data.jobId;
       },
 
+      async destroyProject(id: string, env: string): Promise<string> {
+        const r = await fetch(`${base}/projects/${id}/destroy`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ env }),
+        });
+        if (!r.ok) throw new Error(`destroyProject failed: ${r.status}`);
+        const data = await r.json();
+        return data.jobId;
+      },
+
       async getApplyJob(jobId: string): Promise<{
         id: string;
         status: string;

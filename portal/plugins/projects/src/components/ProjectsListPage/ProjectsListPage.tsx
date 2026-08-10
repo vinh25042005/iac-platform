@@ -30,6 +30,7 @@ export const ProjectsListPage = () => {
   const [iaState, setIaState] = useState<Record<string, { loading: boolean; msg: string }>>({});
   const [applyEnv, setApplyEnv] = useState<Record<string, string>>({});
   const [applyTarget, setApplyTarget] = useState<{ id: string; name: string; env: string } | null>(null);
+  const [destroyTarget, setDestroyTarget] = useState<{ id: string; name: string; env: string } | null>(null);
 
   async function load() {
     setLoading(true);
@@ -157,6 +158,21 @@ export const ProjectsListPage = () => {
               >
                 Apply
               </Button>
+              <Button
+                size="small"
+                variant="contained"
+                color="secondary"
+                style={{ marginLeft: 4 }}
+                onClick={() =>
+                  setDestroyTarget({
+                    id: p.id,
+                    name: p.name,
+                    env: applyEnv[p.id] ?? 'dev',
+                  })
+                }
+              >
+                Destroy
+              </Button>
             </Box>
             {iaState[p.id]?.msg && (
               <Typography variant="caption" color="textSecondary">
@@ -217,7 +233,18 @@ export const ProjectsListPage = () => {
           projectId={applyTarget.id}
           projectName={applyTarget.name}
           env={applyTarget.env}
+          mode="apply"
           onClose={() => setApplyTarget(null)}
+        />
+      )}
+      {destroyTarget && (
+        <ApplyLogDialog
+          open
+          projectId={destroyTarget.id}
+          projectName={destroyTarget.name}
+          env={destroyTarget.env}
+          mode="destroy"
+          onClose={() => setDestroyTarget(null)}
         />
       )}
     </>
