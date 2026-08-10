@@ -54,3 +54,6 @@ e2e-test-report/
 
 # Cache
 .cache/
+
+# SQLite data (tự sinh)
+portal/packages/backend/.data/

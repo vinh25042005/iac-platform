@@ -34,3 +34,6 @@ portal/.cache/
 *.swp
 .idea/
 .vscode/
+
+# SQLite data
+**/.data/
