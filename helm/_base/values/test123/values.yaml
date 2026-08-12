@@ -13,12 +13,16 @@ global:
 env: dev
 
 images:
-  repo: docker.io/youruser  # ← registry user/org của công ty
+  repo: docker.io/vinh2504  # ← registry user/org của công ty
   tag: latest
+  # Dùng image CÓ SẴN (từ dự án deploy-web) — chưa build image riêng cho test123.
+  # Khi có image riêng (<repo>/test123-backend) thì bỏ 2 dòng này.
+  backend: docker.io/vinh2504/deploy-web-backend:stg
+  frontend: docker.io/vinh2504/deploy-web-frontend:stg
 
 vault:
   addr: https://52.221.18.86:8200    # ← Vault address
-  role: myproject                    # Vault k8s auth role (mặc định = project)
+  role: test123                    # Vault k8s auth role (mặc định = project)
   # caConfigMap: vault-ca            # nếu Vault dùng TLS self-signed (import CA)
   tlsSkipVerify: true
   secrets:                           # path kv-v2 trong Vault
@@ -29,14 +33,14 @@ vault:
 postgres:
   database: shopdb
   backup:
-    s3Bucket: myproject-backup       # ← bucket backup riêng cho project
+    s3Bucket: test123-backup       # ← bucket backup riêng cho project
     s3Region: ap-southeast-1
 
 config:
-  frontendUrl: http://myproject.local
+  frontendUrl: http://test123.local
 
 ingress:
-  host: myproject.local
+  host: test123.local
 
 monitoring:
-  grafanaHost: grafana.myproject.local
+  grafanaHost: grafana.test123.local

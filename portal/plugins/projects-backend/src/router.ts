@@ -129,6 +129,8 @@ export async function createRouter({
         created.masterNodeIndex,
         created.services,
         created.instanceType,
+        created.registryBase,
+        created.imageRepoPrefix,
       );
     } catch (e: any) {
       generateError = e.message;

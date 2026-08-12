@@ -79,6 +79,8 @@ export class IacRunner {
     masterNodeIndex = 0,
     services: string[] = ['backend', 'frontend', 'database'],
     instanceType = 't3.small',
+    registryBase = 'docker.io/vinh2504',
+    imageRepoPrefix = '',
   ): Promise<string[]> {
     const script = path.join(this.#iacRoot, 'scripts', 'new-project.sh');
     if (!fs.existsSync(script)) {
@@ -87,7 +89,7 @@ export class IacRunner {
     // Rancher standalone: bật khi service "rancher" được chọn lúc tạo project
     const enableRancher = services.includes('rancher');
     this.#logger.info(
-      `iac: generate project "${slug}" envs=${envs.join(',')} key=${keyName || '(default)'} repo=${repoUrl} nodes=${nodeCount} masterIdx=${masterNodeIndex} services=${services.join(',')} rancher=${enableRancher}`,
+      `iac: generate project "${slug}" envs=${envs.join(',')} key=${keyName || '(default)'} repo=${repoUrl} nodes=${nodeCount} masterIdx=${masterNodeIndex} services=${services.join(',')} rancher=${enableRancher} registry=${registryBase} prefix=${imageRepoPrefix}`,
     );
     const out = await this.#run(
       'bash',
@@ -102,6 +104,8 @@ export class IacRunner {
           MASTER_NODE_INDEX: String(masterNodeIndex),
           ENABLE_RANCHER: enableRancher ? 'true' : 'false',
           INSTANCE_TYPE: instanceType,
+          REGISTRY_BASE: registryBase,
+          IMAGE_REPO_PREFIX: imageRepoPrefix,
         },
       },
       60_000,

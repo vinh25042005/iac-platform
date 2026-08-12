@@ -31,6 +31,11 @@ MASTER_NODE_INDEX="${MASTER_NODE_INDEX:-0}"
 ENABLE_RANCHER="${ENABLE_RANCHER:-false}"
 # Loại máy EC2 — Backstage truyền qua env (chọn trên UI: t3.small/t3.medium/t3.large...)
 INSTANCE_TYPE="${INSTANCE_TYPE:-t3.small}"
+# Docker registry — Backstage truyền qua env REGISTRY_BASE (VD: docker.io/vinh2504).
+# Giá trị này được ghi vào helm/_base/values/<project>/values.yaml → images.repo
+REGISTRY_BASE="${REGISTRY_BASE:-docker.io/youruser}"
+# Tiền tố image — Backstage truyền qua env IMAGE_REPO_PREFIX (VD: dev → <repo>/dev-backend).
+IMAGE_REPO_PREFIX="${IMAGE_REPO_PREFIX:-$PROJECT}"
 TEMPLATE="$ROOT/terraform/environments/_template"
 
 [ -d "$TEMPLATE" ] || { echo "❌ Không thấy $TEMPLATE"; exit 1; }
@@ -66,7 +71,12 @@ EXAMPLE="$ROOT/helm/_base/values/_example"
 if [ -d "$EXAMPLE" ]; then
   mkdir -p "$VDIR"
   cp "$EXAMPLE/values.yaml" "$VDIR/values.yaml"
-  sed -i "s|project: myproject|project: $PROJECT|" "$VDIR/values.yaml"
+  sed -i \
+    -e "s|project: myproject|project: $PROJECT|" \
+    -e "s|docker.io/youruser|$REGISTRY_BASE|" \
+    -e "s|myproject|$PROJECT|g" \
+    "$VDIR/values.yaml"
+  echo "  ✅ helm/_base/values/$PROJECT/ (images.repo=$REGISTRY_BASE)"
   for env in $ENVS; do
     cp "$EXAMPLE/values-$env.yaml" "$VDIR/values-$env.yaml"
   done
