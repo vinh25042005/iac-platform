@@ -1,6 +1,6 @@
 # =============================================================================
 # catalog/iac-platform.yaml — Software Catalog cho iac-platform
-# Đăng ký các project (System) + environment (Component) kiểu CatalogHub.
+# Đăng ký các project (System) + environment (Component).
 # Mỗi project thêm bằng scripts/new-project.sh → thêm 1 System + N Component ở đây.
 # =============================================================================
 ---

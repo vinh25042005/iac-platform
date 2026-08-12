@@ -13,23 +13,23 @@ variable "region" {
 
 # ── Network (từ module network/aws) ──
 variable "public_subnet_id" {
-  type = string
+  type        = string
   description = "Public subnet (AZ a) — master node"
 }
 
 variable "private_subnet_ids" {
-  type = list(string)
+  type        = list(string)
   description = "Private subnets — worker nodes"
 }
 
 variable "sg_ids" {
-  type = list(string)
+  type        = list(string)
   description = "Security group ids cho node (allow_internal + allow_api)"
 }
 
 variable "key_name" {
-  type    = string
-  default = ""
+  type        = string
+  default     = ""
   description = "AWS EC2 key pair name"
 }
 
@@ -40,9 +40,15 @@ variable "instance_type" {
 }
 
 variable "node_count" {
-  type    = number
-  default = 3
-  description = "Tổng số node (node[0]=master public, còn lại worker private). Điền số bạn muốn."
+  type        = number
+  default     = 3
+  description = "Tổng số node (1 master + worker). Điền số bạn muốn."
+}
+
+variable "master_node_index" {
+  type        = number
+  default     = 0
+  description = "Node index nào làm master (kubeadm init, public subnet, có public IP). Worker = các node còn lại (private)."
 }
 
 variable "disk_size" {
@@ -69,7 +75,7 @@ variable "backup_bucket_name" {
 
 # ── Ansible ──
 variable "inventory_path" {
-  type    = string
-  default = ""
+  type        = string
+  default     = ""
   description = "Đường dẫn ghi file inventory (VD: ../../ansible/inventories/<project>-<env>.ini)"
 }

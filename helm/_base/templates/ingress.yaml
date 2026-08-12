@@ -12,9 +12,11 @@ metadata:
     {{- end }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls.enabled }}
   tls:
     - hosts: [{{ .Values.ingress.host | quote }}]
       secretName: {{ include "base.tlsSecret" . }}
+  {{- end }}
   rules:
     - host: {{ .Values.ingress.host }}
       http:

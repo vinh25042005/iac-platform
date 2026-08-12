@@ -10,6 +10,13 @@ override.tf.json
 *_override.tf
 *_override.tf.json
 
+# ── Terraform tfvars (NHẠY CẢM) — chứa key_name, Rancher bootstrap password,
+#    IP, instance type... KHÔNG commit. Giữ file mẫu .example.
+#    (Mỗi project×env có terraform.tfvars riêng sinh bởi new-project.sh)
+terraform/environments/**/terraform.tfvars
+terraform/environments/**/terraform.tfvars.json
+!terraform/environments/_template/terraform.tfvars.example
+
 # ── Ansible ──
 # Inventory sinh tự động bởi Terraform — chứa IP thật, KHÔNG commit
 ansible/inventories/*.ini
@@ -24,14 +31,51 @@ portal/dist/
 portal/dist-types/
 portal/.cache/
 
-# ── Env / secrets ──
+# ── Env / secrets / credentials ──
 .env
+.env.*
+!.env.example
 *.local.yaml
 *-credentials.yaml
+*.env.local
+*.secret
+# Credentials portal (portal.sh đọc từ đây) — KHÔNG commit
+scripts/portal.env
+scripts/*.env
+
+# ── SSH keys / private keys ──
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+id_rsa
+id_ed25519
+*.ppk
+
+# ── Vault / kubeconfig ──
+.vault-token
+.vault-token-*
+.git-credentials
+kubeconfig
+*kubeconfig*.yaml
+*.kubeconfig
+
+# ── Logs / backups (có thể chứa secret) ──
+*.log
+*.bak
+*.orig
+*.tmp
+*.swp
+
+# ── Screenshots demo (chứa IP/password/token hiển thị trên màn hình) ──
+screenshots/
+*.png
+*.jpg
+*.jpeg
 
 # ── OS / editor ──
 .DS_Store
-*.swp
 .idea/
 .vscode/
 

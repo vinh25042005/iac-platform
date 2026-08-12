@@ -1,6 +1,6 @@
 ---
 # Role: worker — Join K8s cluster (worker node)
-# Port từ deploy-web — SSM path theo prefix <project>-<env> (group_vars/all.yml)
+# SSM path theo prefix <project>-<env> (group_vars/all.yml)
 
 - name: Get AWS region
   shell: curl -s http://169.254.169.254/latest/meta-data/placement/region

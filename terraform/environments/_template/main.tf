@@ -14,6 +14,8 @@ terraform {
     key     = "KEY_PLACEHOLDER" # ← new-project.sh thay = <project>/<env>/terraform.tfstate
     region  = "ap-southeast-1"
     encrypt = true
+    # Chống 2 terraform (apply/destroy) đọc-ghi cùng state file song song
+    dynamodb_table = "tfstate-lock"
   }
   required_providers {
     aws = { source = "hashicorp/aws", version = "~> 5.0" }
@@ -53,11 +55,16 @@ module "kubernetes" {
 
   public_subnet_id    = module.network.public_subnet_ids[0]
   private_subnet_ids  = module.network.private_subnet_ids
-  sg_ids              = [module.network.sg_allow_internal_id, module.network.sg_allow_api_id]
+  sg_ids              = [
+    module.network.sg_allow_internal_id,
+    module.network.sg_allow_api_id,
+    module.network.sg_allow_web_id, # BẮT BUỘC: mở 80/443 cho NLB/Internet tới node (F5 ingress hostNetwork)
+  ]
 
   key_name      = var.key_name
   instance_type = var.instance_type
   node_count    = var.node_count
+  master_node_index = var.master_node_index
   disk_size     = var.disk_size
 
   k8s_version = var.k8s_version
@@ -65,6 +72,25 @@ module "kubernetes" {
 
   backup_bucket_name = var.backup_bucket_name
   inventory_path     = "${path.root}/../../../../ansible/inventories/${var.project}-${var.env}.ini"
+}
+
+# ── Rancher standalone — EC2 riêng chạy Rancher Server (Docker), NGOÀI cụm K8s.
+#    Chỉ tạo khi chọn service "rancher" lúc tạo project (enable_rancher=true).
+#    Quản lý cụm K8s từ xa qua kubeconfig (Rancher Import Cluster).
+module "rancher" {
+  source = "../../../modules/rancher"
+  count  = var.enable_rancher ? 1 : 0
+
+  project_name = var.project
+  key_name     = var.key_name
+
+  rancher_subnet_id = module.network.public_subnet_ids[0]
+  vpc_id            = module.network.vpc_id
+  instance_type     = "t3.medium"
+  disk_size         = var.disk_size
+
+  rancher_version           = var.rancher_version
+  rancher_bootstrap_password = var.rancher_bootstrap_password
 }
 
 # ── NLB cho Ingress: trỏ thẳng vào node (ingress-nginx hostNetwork 80/443) ──
@@ -201,17 +227,19 @@ resource "null_resource" "ansible" {
       eval $(ssh-agent -s)
       ssh-add "$KEY"
 
-      echo ">>> Chạy Ansible (retry 3 lần)..."
+      echo ">>> Chạy Ansible (retry 3 lần, mỗi lần tối đa 15 phút)..."
       # cd vào đúng thư mục ansible/ để Ansible load group_vars/all.yml
       # (thiếu bước này → 'k8s_version' undefined)
-      cd "$(dirname "$INVENTORY")"
+      cd "$(dirname "$(dirname "$INVENTORY")")"
       for i in $(seq 1 3); do
-        if timeout 900 ansible-playbook -i ${var.project}-${var.env}.ini \
+        echo ">>> [Ansible attempt $i/3] BAT DAU - cum moi thuong mat 10-15 phut"
+        if timeout 900 ansible-playbook -i inventories/${var.project}-${var.env}.ini \
             playbooks/k8s-cluster.yml -e project=${var.project} -e env=${var.env}; then
+          echo ">>> [Ansible attempt $i/3] THANH CONG"
           echo ">>> Ansible OK"
           exit 0
         fi
-        echo "  Ansible attempt $i/3 failed, retry sau 30s..."
+        echo "  Ansible attempt $i/3 FAILED, retry sau 30s..."
         sleep 30
       done
       echo ">>> Ansible failed sau 3 lần"
@@ -257,5 +285,25 @@ provider "kubernetes" {
 provider "helm" {
   kubernetes = {
     config_path = pathexpand("~/.kube/config")
+  }
+}
+
+# ── Cài platform components dùng chung (mọi app đều cần) ──
+#   ingress-nginx + kube-prometheus-stack (Prometheus/Grafana) + metrics-server
+#   (HPA) + aws-ebs-csi-driver (StorageClass EBS) + argo-rollouts.
+#   Cài chart helm/_cluster — helm upgrade idempotent, self-heal mỗi lần apply.
+resource "terraform_data" "install_cluster_base" {
+  depends_on = [terraform_data.wait_k8s_api]
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      set -e
+      export KUBECONFIG="$HOME/.kube/config"
+      cd "${path.root}/../../../.."
+      helm upgrade --install cluster-base helm/_cluster \
+        -n kube-system --create-namespace \
+        --wait --timeout 20m
+      echo ">>> Cluster base OK: ingress-nginx + prometheus/grafana + metrics-server + ebs-csi + argo-rollouts"
+    EOT
   }
 }

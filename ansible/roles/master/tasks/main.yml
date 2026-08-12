@@ -1,6 +1,6 @@
 ---
 # Role: master — Khởi tạo cluster với kubeadm init + Calico + upload SSM
-# Port từ deploy-web — SSM path theo prefix <project>-<env> (group_vars/all.yml)
+# SSM path theo prefix <project>-<env> (group_vars/all.yml)
 
 - name: Get private IP
   shell: hostname -I | awk '{print $1}'

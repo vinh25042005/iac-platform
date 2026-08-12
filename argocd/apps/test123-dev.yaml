@@ -1,0 +1,23 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: test123-dev
+  namespace: argocd
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/vinh25042005/iac-platform.git
+    targetRevision: main
+    path: helm/_base
+    helm:
+      valueFiles:
+        - values/test123/values.yaml
+        - values/test123/values-dev.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: test123-dev
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions:
+      - CreateNamespace=true

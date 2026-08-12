@@ -2,9 +2,10 @@ apiVersion: v2
 name: _cluster
 description: |
   Chart CÀI 1 LẦN MỖI CLUSTER — các component cấp hạ tầng dùng chung cho MỌI project:
-  kube-prometheus-stack, ingress-nginx, metrics-server, aws-ebs-csi-driver, cert-manager.
-  KHÔNG cài chart này cho từng project — chỉ cài 1 lần khi bootstrap cluster
-  (ArgoCD root cho cluster, hoặc Terraform/Ansible như deploy-web).
+  kube-prometheus-stack, nginx-ingress (F5 NGINX Ingress Controller), metrics-server, aws-ebs-csi-driver, argo-rollouts.
+  cert-manager do Ansible cài riêng (CRDs + manifest) nên tắt subchart ở đây.
+  Terraform (terraform_data.install_cluster_base) chạy helm upgrade --install chart này
+  ngay trong apply → bấm Apply là có đủ nền tảng cho mọi app.
 type: application
 version: 1.0.0
 
@@ -13,10 +14,10 @@ dependencies:
     version: "~68"
     repository: "https://prometheus-community.github.io/helm-charts"
     condition: kube-prometheus-stack.enabled
-  - name: ingress-nginx
-    version: "~4.11"
-    repository: "https://kubernetes.github.io/ingress-nginx"
-    condition: ingress-nginx.enabled
+  - name: nginx-ingress
+    version: "~2.6"
+    repository: "https://helm.nginx.com/stable"
+    condition: nginx-ingress.enabled
   - name: metrics-server
     version: "~3.12"
     repository: "https://kubernetes-sigs.github.io/metrics-server"
@@ -25,6 +26,10 @@ dependencies:
     version: "~2.37"
     repository: "https://kubernetes-sigs.github.io/aws-ebs-csi-driver"
     condition: aws-ebs-csi-driver.enabled
+  - name: argo-rollouts
+    version: "~2.41"
+    repository: "https://argoproj.github.io/argo-helm"
+    condition: argo-rollouts.enabled
   - name: cert-manager
     version: "~1.14"
     repository: "https://charts.jetstack.io"

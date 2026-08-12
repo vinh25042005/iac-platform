@@ -20,7 +20,7 @@ Script tự sinh:
 Terraform dựng **cụm kubeadm đầy đủ**:
 - `network`: VPC 2 tầng + NAT + SG (least privilege)
 - `kubernetes`: EC2 `node[0]`=master (public) + `node[1..]`=worker (private)
-- NLB + target group → ingress-nginx
+- NLB + target group → F5 NGINX Ingress Controller (nginx-ingress)
 - `null_resource.ansible`: kubeadm init + join + Calico + cert-manager + ArgoCD
 - Kubeconfig + join command → SSM `/k8s/<project>-<env>/` (self-heal khi cluster đổi)
 

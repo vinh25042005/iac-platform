@@ -1,5 +1,5 @@
 ---
-# Playbook: Cài đặt kubeadm Kubernetes cluster (port từ deploy-web)
+# Playbook: Cài đặt kubeadm Kubernetes cluster
 # Chạy sau khi Terraform tạo xong EC2 instances.
 # Inventory do module terraform/modules/kubernetes/aws sinh ra
 # (ansible/inventories/<project>-<env>.ini).
@@ -66,6 +66,13 @@
 
     - name: Install ArgoCD (server-side để tránh lỗi CRD >262KB)
       shell: |
+        # IDEMPOTENT: nếu argocd-server đã available (đã cài từ lần trước) thì
+        # KHÔNG re-apply lại toàn bộ manifest nặng (tránh treo server-side apply
+        # trên CRD khổng lồ khi cluster đã có sẵn).
+        if kubectl get deploy argocd-server -n argocd --no-headers 2>/dev/null | grep -q '1/1'; then
+          echo "argocd-server đã available — bỏ qua re-apply"
+          exit 0
+        fi
         kubectl create namespace argocd 2>/dev/null || true
         curl -sL https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml | \
           kubectl apply --server-side -n argocd -f -

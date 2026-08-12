@@ -1,6 +1,6 @@
 ---
 # Role: common — Cài containerd, kubeadm, kubectl, kubelet trên tất cả node
-# Port từ deploy-web — chuẩn hoá dùng biến k8s_version (group_vars/all.yml)
+# Dùng biến k8s_version (group_vars/all.yml)
 
 - name: Kill unattended-upgrades and remove apt locks (avoid race condition on fresh boot)
   shell: |

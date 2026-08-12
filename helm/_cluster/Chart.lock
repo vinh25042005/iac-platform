@@ -1,0 +1,21 @@
+dependencies:
+- name: kube-prometheus-stack
+  repository: https://prometheus-community.github.io/helm-charts
+  version: 68.5.0
+- name: nginx-ingress
+  repository: https://helm.nginx.com/stable
+  version: 2.6.4
+- name: metrics-server
+  repository: https://kubernetes-sigs.github.io/metrics-server
+  version: 3.12.2
+- name: aws-ebs-csi-driver
+  repository: https://kubernetes-sigs.github.io/aws-ebs-csi-driver
+  version: 2.37.0
+- name: argo-rollouts
+  repository: https://argoproj.github.io/argo-helm
+  version: 2.41.1
+- name: cert-manager
+  repository: https://charts.jetstack.io
+  version: v1.14.7
+digest: sha256:ad86277681866330055ea5d9ab8b79e1e6c06efa056af05ae67a139d9450b5ba
+generated: "2026-08-11T17:43:52.648119959+08:00"

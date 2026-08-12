@@ -8,6 +8,16 @@ import {
   Typography,
   CircularProgress,
   Box,
+  Stepper,
+  Step,
+  StepLabel,
+  Checkbox,
+  FormControlLabel,
+  Divider,
+  Chip,
+  Select,
+  InputLabel,
+  FormControl,
 } from '@material-ui/core';
 import { Header, Container } from '@backstage/ui';
 import { useProjectsApi, JenkinsInstance } from '../../api';
@@ -16,23 +26,48 @@ interface FormState {
   name: string;
   slug: string;
   owner: string;
-  kickoffDate: string;
-  jiraKey: string;
   jenkinsInstance: string;
   keyName: string;
   status: string;
+  repoUrl: string;
+  nodeCount: number;
+  masterNodeIndex: number;
+  instanceType: string;
+  appRepo: string;
+  registryBase: string;
+  imageRepoPrefix: string;
+  vaultEip: string;
+  deployBranch: string;
 }
+
+// GitOps repo mặc định — repo chứa helm/_base + argocd/apps (ArgoCD sẽ clone).
+// Người dùng có thể đổi sang repo riêng của team.
+const DEFAULT_REPO_URL = 'https://github.com/vinh25042005/iac-platform.git';
 
 const emptyForm: FormState = {
   name: '',
   slug: '',
   owner: '',
-  kickoffDate: '',
-  jiraKey: '',
   jenkinsInstance: '',
   keyName: 'techshop-key',
   status: 'active',
+  repoUrl: DEFAULT_REPO_URL,
+  nodeCount: 3,
+  masterNodeIndex: 0,
+  instanceType: 't3.small',
+  appRepo: '',
+  registryBase: 'docker.io/vinh2504',
+  imageRepoPrefix: '',
+  vaultEip: '52.221.18.86',
+  deployBranch: 'week-6-argo-rollouts',
 };
+
+const NODE_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+const INSTANCE_TYPES = ['t3.small', 't3.medium', 't3.large', 't3.xlarge', 't4g.small', 't4g.medium'];
+
+const ENV_OPTIONS = ['dev', 'stg', 'prd'];
+const SERVICE_OPTIONS = ['backend', 'frontend', 'database', 'rancher'];
+const STEPS = ['Project Details', 'Environments & Services', 'Integration & Review'];
 
 export const CreateProjectPage = ({ onCreated }: { onCreated?: () => void }) => {
   const api = useProjectsApi();
@@ -42,6 +77,11 @@ export const CreateProjectPage = ({ onCreated }: { onCreated?: () => void }) => 
   const [showNewJenkins, setShowNewJenkins] = useState(false);
   const [newJenkinsName, setNewJenkinsName] = useState('');
   const [newJenkinsUrl, setNewJenkinsUrl] = useState('');
+  const [step, setStep] = useState(0);
+  const [envs, setEnvs] = useState<string[]>(['dev', 'stg', 'prd']);
+  const [services, setServices] = useState<string[]>(['backend', 'frontend', 'database']);
+  const [registry, setRegistry] = useState('docker.io/youruser');
+  const [vaultProfile, setVaultProfile] = useState('Vault');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -89,6 +129,20 @@ export const CreateProjectPage = ({ onCreated }: { onCreated?: () => void }) => 
     }
   }
 
+  function toggle(arr: string[], v: string, setArr: (a: string[]) => void) {
+    setArr(arr.includes(v) ? arr.filter(x => x !== v) : [...arr, v]);
+  }
+
+  function canNext() {
+    if (step === 0) {
+      return !!(form.name.trim() && form.slug.trim() && form.owner.trim());
+    }
+    if (step === 1) {
+      return envs.length > 0 && services.length > 0;
+    }
+    return true;
+  }
+
   async function handleSubmit() {
     setError('');
     if (!form.name.trim() || !form.slug.trim() || !form.owner.trim()) {
@@ -106,10 +160,15 @@ export const CreateProjectPage = ({ onCreated }: { onCreated?: () => void }) => 
       setError('Chọn hoặc tạo mới Jenkins Instance');
       return;
     }
+    if (envs.length === 0) {
+      setError('Chọn ít nhất 1 environment');
+      return;
+    }
     setSubmitting(true);
     try {
-      await api.createProject(form);
+      await api.createProject({ ...form, envs, services });
       setForm(emptyForm);
+      setStep(0);
       onCreated?.();
       setError('✅ Đã tạo project thành công!');
     } catch (e: any) {
@@ -121,12 +180,16 @@ export const CreateProjectPage = ({ onCreated }: { onCreated?: () => void }) => 
 
   return (
     <>
-      <Header title="Create Project" subtitle="Tạo project mới trên iac-platform (giống CatalogHub)" />
+      <Header title="Create Project" description="Tạo project mới trên iac-platform" />
       <Container>
-        <Paper style={{ padding: 24, maxWidth: 860 }}>
-          <Typography variant="h6" gutterBottom>
-            Project Details — basic information synchronized from database
-          </Typography>
+        <Paper style={{ padding: 24, maxWidth: 920 }}>
+          <Stepper activeStep={step} alternativeLabel>
+            {STEPS.map(l => (
+              <Step key={l}>
+                <StepLabel>{l}</StepLabel>
+              </Step>
+            ))}
+          </Stepper>
 
           {error && (
             <Box mb={2} p={2} style={{ background: '#fdecea', borderRadius: 4 }}>
@@ -134,6 +197,7 @@ export const CreateProjectPage = ({ onCreated }: { onCreated?: () => void }) => 
             </Box>
           )}
 
+          {step === 0 && (
           <Grid container spacing={2}>
             <Grid item xs={12} sm={6}>
               <TextField
@@ -145,10 +209,11 @@ export const CreateProjectPage = ({ onCreated }: { onCreated?: () => void }) => 
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Project ID / Code (Slug)"
+                label="Namespace"
                 fullWidth
                 value={form.slug}
                 onChange={set('slug')}
+                helperText="Dùng làm namespace cho mỗi env (VD: test3-dev)"
               />
             </Grid>
 
@@ -180,6 +245,148 @@ export const CreateProjectPage = ({ onCreated }: { onCreated?: () => void }) => 
                 <MenuItem value="active">Active</MenuItem>
                 <MenuItem value="archived">Archived</MenuItem>
               </TextField>
+            </Grid>
+
+            <Grid item xs={12}>
+              <TextField
+                label="GitOps Repo URL"
+                fullWidth
+                value={form.repoUrl}
+                onChange={set('repoUrl')}
+                helperText="Repo chứa helm/_base + argocd/apps — ArgoCD clone từ đây. Dùng làm repoURL trong argocd/apps/<slug>-<env>.yaml"
+              />
+            </Grid>
+
+            {/* ── Cụm kubeadm: số node + node nào làm master ── */}
+            <Grid item xs={12}>
+              <Typography variant="subtitle1" gutterBottom style={{ marginTop: 8 }}>
+                Kubernetes Cluster — Nodes
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    label="Số node (tổng)"
+                    select
+                    fullWidth
+                    value={form.nodeCount}
+                    onChange={e => {
+                      const n = Number(e.target.value);
+                      setForm(f => ({
+                        ...f,
+                        nodeCount: n,
+                        // Nếu master index vượt số node → tự về 0
+                        masterNodeIndex: f.masterNodeIndex >= n ? 0 : f.masterNodeIndex,
+                      }));
+                    }}
+                    helperText="1 master + N worker (kubeadm)"
+                  >
+                    {NODE_OPTIONS.map(n => (
+                      <MenuItem key={n} value={n}>
+                        {n} node
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    label="Node nào là Master"
+                    select
+                    fullWidth
+                    value={form.masterNodeIndex}
+                    onChange={e => setForm(f => ({ ...f, masterNodeIndex: Number(e.target.value) }))}
+                    helperText="Master ở public subnet (có public IP — kubeadm init + NLB upstream)"
+                  >
+                    {Array.from({ length: form.nodeCount }, (_, i) => (
+                      <MenuItem key={i} value={i}>
+                        Node {i} {i === 0 ? '(mặc định)' : ''}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    label="Loại máy (Instance Type)"
+                    select
+                    fullWidth
+                    value={form.instanceType}
+                    onChange={e => setForm(f => ({ ...f, instanceType: String(e.target.value) }))}
+                    helperText="EC2 cho master + worker (t3.small = 2 vCPU/2GB)"
+                  >
+                    {INSTANCE_TYPES.map(t => (
+                      <MenuItem key={t} value={t}>
+                        {t}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </Grid>
+                <Grid item xs={12}>
+                  <Chip
+                    size="small"
+                    color="primary"
+                    variant="outlined"
+                    label={`Master: node ${form.masterNodeIndex} · Worker: ${form.nodeCount - 1} node${form.nodeCount - 1 > 0 ? ` (node ${Array.from({ length: form.nodeCount }, (_, i) => i).filter(i => i !== form.masterNodeIndex).join(', ')})` : ''} · Máy: ${form.instanceType}`}
+                  />
+                </Grid>
+              </Grid>
+            </Grid>
+
+            {/* ── Jenkins Pipeline Defaults — params hiển thị sẵn trên Jenkins UI ── */}
+            <Grid item xs={12}>
+              <Typography variant="subtitle1" gutterBottom style={{ marginTop: 8 }}>
+                Jenkins Pipeline — Default Parameters
+              </Typography>
+              <Typography variant="body2" color="textSecondary" gutterBottom>
+                Những giá trị này sẽ là default của job <b>{form.slug || '<slug>'}-ci</b> trên Jenkins (có thể đổi lại khi build).
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    label="App Repo (APP_REPO)"
+                    fullWidth
+                    value={form.appRepo}
+                    onChange={e => setForm(f => ({ ...f, appRepo: e.target.value }))}
+                    placeholder={`https://github.com/vinh25042005/${form.slug || 'myapp'}.git`}
+                    helperText="Repo mã nguồn app để build"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    label="Registry Base (REGISTRY_BASE)"
+                    fullWidth
+                    value={form.registryBase}
+                    onChange={e => setForm(f => ({ ...f, registryBase: e.target.value }))}
+                    helperText="VD: docker.io/vinh2504"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    label="Image Repo Prefix (IMAGE_REPO_PREFIX)"
+                    fullWidth
+                    value={form.imageRepoPrefix}
+                    onChange={e => setForm(f => ({ ...f, imageRepoPrefix: e.target.value }))}
+                    placeholder={form.slug || 'myapp'}
+                    helperText="Image → &lt;prefix&gt;-backend / &lt;prefix&gt;-frontend"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    label="Vault EIP (VAULT_EIP)"
+                    fullWidth
+                    value={form.vaultEip}
+                    onChange={e => setForm(f => ({ ...f, vaultEip: e.target.value }))}
+                    helperText="Vault VM IP — VAULT_ADDR=https://&lt;EIP&gt;:8200"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    label="Deploy Branch (DEPLOY_BRANCH)"
+                    fullWidth
+                    value={form.deployBranch}
+                    onChange={e => setForm(f => ({ ...f, deployBranch: e.target.value }))}
+                    helperText="Branch deploy-web ArgoCD đang track"
+                  />
+                </Grid>
+              </Grid>
             </Grid>
 
             {/* ── Jenkins Instance: chọn sẵn HOẶC tạo mới ── */}
@@ -257,20 +464,153 @@ export const CreateProjectPage = ({ onCreated }: { onCreated?: () => void }) => 
               )}
             </Grid>
 
-            <Grid item xs={12}>
-              <Box display="flex" justifyContent="flex-end" mt={2}>
-                <Button
-                  variant="contained"
-                  color="primary"
-                  size="large"
-                  onClick={handleSubmit}
-                  disabled={submitting}
-                >
-                  {submitting ? 'Đang tạo...' : 'Create Project'}
-                </Button>
-              </Box>
-            </Grid>
           </Grid>
+          )}
+
+          {step === 1 && (
+            <>
+              <Typography variant="subtitle1" gutterBottom>
+                Environments — mỗi env sẽ là một cluster riêng
+              </Typography>
+              <Grid container spacing={2}>
+                {ENV_OPTIONS.map(e => (
+                  <Grid item key={e}>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={envs.includes(e)}
+                          onChange={() => toggle(envs, e, setEnvs)}
+                        />
+                      }
+                      label={e.toUpperCase()}
+                    />
+                  </Grid>
+                ))}
+              </Grid>
+
+              <Divider style={{ margin: '20px 0' }} />
+
+              <Typography variant="subtitle1" gutterBottom>
+                Services
+              </Typography>
+              <Typography variant="body2" color="textSecondary" gutterBottom>
+                Chọn các component sẽ deploy lên cluster.
+              </Typography>
+              <Grid container spacing={2}>
+                {SERVICE_OPTIONS.map(s => (
+                  <Grid item xs={12} sm={6} md={4} key={s}>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={services.includes(s)}
+                          onChange={() => toggle(services, s, setServices)}
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography variant="body1" style={{ textTransform: 'capitalize' }}>
+                            {s}
+                          </Typography>
+                          {s === 'rancher' && (
+                            <Typography variant="caption" color="textSecondary">
+                              EC2 riêng chạy Rancher Server — quản lý cluster (ngoài cụm K8s)
+                            </Typography>
+                          )}
+                        </Box>
+                      }
+                    />
+                  </Grid>
+                ))}
+              </Grid>
+            </>
+          )}
+
+          {step === 2 && (
+            <>
+              <Typography variant="subtitle1" gutterBottom>
+                Integration Profiles
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <FormControl fullWidth>
+                    <InputLabel>Vault Profile (Secret Storage)</InputLabel>
+                    <Select
+                      value={vaultProfile}
+                      onChange={e => setVaultProfile(String(e.target.value))}
+                    >
+                      <MenuItem value="Vault">
+                        Vault (52.221.18.86:8200)
+                      </MenuItem>
+                      <MenuItem value="None">None</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    label="Registry URL"
+                    fullWidth
+                    value={registry}
+                    onChange={e => setRegistry(e.target.value)}
+                    helperText="Docker registry user/org"
+                  />
+                </Grid>
+              </Grid>
+
+              <Divider style={{ margin: '20px 0' }} />
+
+              <Typography variant="subtitle1" gutterBottom>
+                Review
+              </Typography>
+              <Box>
+                <Chip label={`Project: ${form.name || '—'}`} style={{ marginRight: 8, marginBottom: 8 }} />
+                <Chip label={`Slug: ${form.slug || '—'}`} style={{ marginRight: 8 }} />
+                <Chip label={`Envs: ${envs.join(', ')}`} style={{ marginRight: 8 }} />
+                <Chip label={`Services: ${services.join(', ')}`} style={{ marginRight: 8 }} />
+                <Chip label={`Key: ${form.keyName}`} />
+                <Chip label={`Nodes: ${form.nodeCount} (master node ${form.masterNodeIndex}) · ${form.instanceType}`} style={{ marginRight: 8 }} />
+              </Box>
+              <Box mt={1}>
+                <Chip label={`GitOps Repo: ${form.repoUrl || DEFAULT_REPO_URL}`} />
+              </Box>
+              <Box mt={1}>
+                <Chip label={`APP_REPO: ${form.appRepo || form.slug || '—'}`} style={{ marginRight: 8 }} />
+                <Chip label={`REGISTRY_BASE: ${form.registryBase}`} style={{ marginRight: 8 }} />
+                <Chip label={`IMAGE_PREFIX: ${form.imageRepoPrefix || form.slug || '—'}`} style={{ marginRight: 8 }} />
+                <Chip label={`VAULT_EIP: ${form.vaultEip}`} style={{ marginRight: 8 }} />
+                <Chip label={`DEPLOY_BRANCH: ${form.deployBranch}`} />
+              </Box>
+            </>
+          )}
+
+          <Box display="flex" justifyContent="flex-end" mt={3} pb={1}>
+            <Button
+              onClick={() => setStep(s => Math.max(0, s - 1))}
+              disabled={step === 0 || submitting}
+              style={{ marginRight: 8 }}
+            >
+              Back
+            </Button>
+            {step < STEPS.length - 1 ? (
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={() => setStep(s => s + 1)}
+                disabled={!canNext()}
+              >
+                Next
+              </Button>
+            ) : (
+              <Button
+                variant="contained"
+                color="primary"
+                size="large"
+                onClick={handleSubmit}
+                disabled={submitting}
+              >
+                {submitting ? 'Đang tạo...' : 'Create Project'}
+              </Button>
+            )}
+          </Box>
         </Paper>
       </Container>
     </>

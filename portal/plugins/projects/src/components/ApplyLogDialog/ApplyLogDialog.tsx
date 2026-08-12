@@ -16,9 +16,19 @@ interface Props {
   projectId: string;
   projectName: string;
   env: string;
-  mode?: 'apply' | 'destroy'; // apply (mặc định) hoặc destroy
+  mode?: 'apply' | 'destroy' | 'init' | 'plan'; // apply (mặc định) / destroy / init / plan
+  // view: chỉ XEM log của job đã có (initialJobId) — không start apply/destroy mới.
+  // Dùng khi mở lại log đang chạy sau khi lỡ đóng dialog.
+  initialJobId?: string;
   onClose: () => void;
 }
+
+const MODE_LABEL: Record<string, string> = {
+  apply: 'apply',
+  destroy: 'destroy',
+  init: 'init',
+  plan: 'plan',
+};
 
 // Modal hiện log terraform apply/destroy real-time (poll job theo jobId mỗi 2s)
 export const ApplyLogDialog = ({
@@ -27,6 +37,7 @@ export const ApplyLogDialog = ({
   projectName,
   env,
   mode = 'apply',
+  initialJobId,
   onClose,
 }: Props) => {
   const api = useProjectsApi();
@@ -36,16 +47,27 @@ export const ApplyLogDialog = ({
   const [error, setError] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Bắt đầu apply/destroy khi mở dialog
+  // Bắt đầu apply/destroy khi mở dialog (KHÔNG áp dụng ở chế độ view)
   useEffect(() => {
     if (!open) return;
     setLogs([]);
     setStatus('starting');
     setError('');
     setJobId('');
-    const start = mode === 'destroy'
-      ? api.destroyProject(projectId, env)
-      : api.applyProject(projectId, env);
+    // view mode: bám theo job đã có, không start mới
+    if (initialJobId) {
+      setJobId(initialJobId);
+      setStatus('running');
+      return;
+    }
+    const start =
+      mode === 'destroy'
+        ? api.destroyProject(projectId, env)
+        : mode === 'init'
+          ? api.initProject(projectId, env)
+          : mode === 'plan'
+            ? api.planProject(projectId, env)
+            : api.applyProject(projectId, env);
     start
       .then(id => {
         setJobId(id);
@@ -56,7 +78,7 @@ export const ApplyLogDialog = ({
         setStatus('error');
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, projectId, env, mode]);
+  }, [open, projectId, env, mode, initialJobId]);
 
   // Poll log khi có jobId
   useEffect(() => {
@@ -92,10 +114,24 @@ export const ApplyLogDialog = ({
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle>
-        Terraform {mode === 'destroy' ? 'Destroy' : 'Apply'} — {projectName} ({env})
+        Terraform {MODE_LABEL[mode] ?? 'apply'.toUpperCase()} — {projectName} ({env})
         {status === 'running' && (
           <Box component="span" ml={2} style={{ verticalAlign: 'middle' }}>
             <CircularProgress size={18} />
+          </Box>
+        )}
+        {status === 'success' && (
+          <Box component="span" ml={2} style={{ verticalAlign: 'middle' }}>
+            <Typography component="span" style={{ color: '#2e7d32', fontWeight: 600 }}>
+              ✓ Đã xong
+            </Typography>
+          </Box>
+        )}
+        {status === 'error' && (
+          <Box component="span" ml={2} style={{ verticalAlign: 'middle' }}>
+            <Typography component="span" style={{ color: '#d32f2f', fontWeight: 600 }}>
+              ✗ Thất bại
+            </Typography>
           </Box>
         )}
       </DialogTitle>
@@ -120,7 +156,7 @@ export const ApplyLogDialog = ({
         >
           {logs.length === 0 && status !== 'error' ? (
             <Typography style={{ color: '#8b949e' }}>
-              Đang chờ terraform init + apply...
+              Đang chờ terraform {MODE_LABEL[mode] ?? 'apply'}...
             </Typography>
           ) : (
             logs.join('')
@@ -130,14 +166,14 @@ export const ApplyLogDialog = ({
         {status === 'success' && (
           <Box mt={2}>
             <Typography color="primary" style={{ fontWeight: 600 }}>
-              ✅ Terraform {mode === 'destroy' ? 'destroy' : 'apply'} thành công!
+              ✅ Terraform {MODE_LABEL[mode] ?? 'apply'} thành công!
             </Typography>
           </Box>
         )}
         {status === 'error' && (
           <Box mt={2}>
             <Typography color="error" style={{ fontWeight: 600 }}>
-              ❌ Terraform {mode === 'destroy' ? 'destroy' : 'apply'} thất bại (xem log ở trên)
+              ❌ Terraform {MODE_LABEL[mode] ?? 'apply'} thất bại (xem log ở trên)
             </Typography>
           </Box>
         )}

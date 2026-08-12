@@ -24,6 +24,13 @@ ENVS="${ENVS:-dev stg prd}"
 # Key pair AWS — Backstage truyền qua env KEY_NAME (VD: techshop-key).
 # Nếu không truyền, fallback về <project>-key (giữ hành vi cũ).
 KEY_NAME="${KEY_NAME:-$PROJECT-key}"
+# Số node + node nào làm master — Backstage truyền qua env (tùy chọn trên UI).
+NODE_COUNT="${NODE_COUNT:-3}"
+MASTER_NODE_INDEX="${MASTER_NODE_INDEX:-0}"
+# Rancher standalone (chọn service "rancher" trên UI) — true/false.
+ENABLE_RANCHER="${ENABLE_RANCHER:-false}"
+# Loại máy EC2 — Backstage truyền qua env (chọn trên UI: t3.small/t3.medium/t3.large...)
+INSTANCE_TYPE="${INSTANCE_TYPE:-t3.small}"
 TEMPLATE="$ROOT/terraform/environments/_template"
 
 [ -d "$TEMPLATE" ] || { echo "❌ Không thấy $TEMPLATE"; exit 1; }
@@ -41,10 +48,14 @@ project = "$PROJECT"
 env     = "$env"
 region  = "$REGION"
 
-# ── Cụm kubeadm (sửa theo ý bạn) ──
-key_name      = "$KEY_NAME"   # ← AWS key pair đã tạo (từ Backstage / mặc định <project>-key)
-instance_type = "t3.small"
-node_count    = 3                # ← điền số node (1 master + N-1 worker)
+# ── Cụm kubeadm (tùy chọn ngay trên Backstage khi tạo project) ──
+key_name          = "$KEY_NAME"     # ← AWS key pair đã tạo (từ Backstage / mặc định <project>-key)
+instance_type     = "$INSTANCE_TYPE"  # ← loại máy (t3.small/t3.medium/t3.large... chọn trên Backstage)
+node_count        = $NODE_COUNT     # ← tổng số node (1 master + worker)
+master_node_index = $MASTER_NODE_INDEX  # ← node nào làm master (0 = node đầu)
+
+# ── Rancher standalone (chọn service "rancher" trên Backstage) ──
+enable_rancher = $ENABLE_RANCHER   # true → EC2 riêng chạy Rancher (ngoài cụm K8s)
 EOF
   echo "  ✅ $dst"
 done

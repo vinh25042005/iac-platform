@@ -1,26 +1,94 @@
 # ============================================================================
 # helm/_cluster/values.yaml — Component cấp CLUSTER (cài 1 lần mỗi cluster)
-# Copy cấu hình subchart từ deploy-web/helm/techshop/values.yaml khi cần:
-#   - ingress-nginx: hostNetwork DaemonSet + metrics
-#   - kube-prometheus-stack: grafana + prometheus (tắt webhook/alertmanager)
-#   - metrics-server: --kubelet-insecure-tls
-#   - aws-ebs-csi-driver: gp3 StorageClass (hoặc để Terraform cài)
-#   - cert-manager: selfsigned ClusterIssuer
+# Terraform (terraform_data.install_cluster_base) cài chart này trong apply.
 # ============================================================================
 
-# Mặc định BẬT các component nền tảng
+# ─── F5 NGINX Ingress Controller (NLB trỏ thẳng 80/443 vào node) ───
+# Chart: nginx-ingress v2.6 (app 5.5.4) — https://helm.nginx.com/stable
+# Thay thế chart cộng đồng ingress-nginx (kubernetes/ingress-nginx).
+nginx-ingress:
+  enabled: true
+  controller:
+    kind: daemonset            # mỗi node 1 pod → NLB trỏ thẳng 80/443 vào node
+    hostNetwork: true
+    containerPort:
+      http: 80
+      https: 443
+    service:
+      create: true
+      type: ClusterIP          # NLB ngoài trỏ thẳng node — không tạo thêm AWS LB
+    ingressClass:
+      name: nginx
+      create: true
+      setAsDefaultIngress: false
+    # Health check cho NLB target group: GET /healthz → 200 (default server F5)
+    healthStatus: true
+    healthStatusURI: /healthz
+    reportIngressStatus:
+      enable: false            # service ClusterIP không có IP ngoài → tắt report
+  # ─── Metrics cho AnalysisTemplate (Argo Rollouts) — port 9113 ───
+  prometheus:
+    create: true               # -enable-prometheus-metrics, /metrics 9113
+    port: 9113
+    service:
+      create: true             # Service headless để ServiceMonitor scrape
+    serviceMonitor:
+      create: true             # ServiceMonitor riêng của chart (kube-system)
+
+# ─── kube-prometheus-stack (Prometheus + Grafana) ───
 kube-prometheus-stack:
   enabled: true
-ingress-nginx:
-  enabled: true
+  alertmanager:
+    enabled: false
+  # Tắt admission webhook + TLS của prometheus-operator:
+  #   - admissionWebhooks.enabled=false → không tạo webhook/hook job
+  #   - tls.enabled=false → operator KHÔNG mount secret admission
+  prometheusOperator:
+    admissionWebhooks:
+      enabled: false
+    tls:
+      enabled: false
+  prometheus:
+    prometheusSpec:
+      retention: 7d
+      retentionSize: 5GB
+      resources:
+        requests: { cpu: 100m, memory: 256Mi }
+        limits:   { cpu: 500m, memory: 1Gi }
+      # Cho phép chọn ServiceMonitor từ mọi namespace
+      serviceMonitorSelectorNilUsesHelmValues: false
+  grafana:
+    # admin password mặc định do chart sinh (lấy: kubectl get secret -n kube-system \
+    #   cluster-base-grafana -o jsonpath='{.data.admin-password}' | base64 -d)
+    service:
+      type: ClusterIP
+      port: 80
+    sidecar:
+      dashboards:
+        enabled: true
+        label: grafana_dashboard
+        labelValue: "1"
+  prometheus-node-exporter:
+    enabled: true
+  kube-state-metrics:
+    enabled: true
+
+# ─── Metrics Server (cho HPA — hpa.yaml target kind: Rollout) ───
 metrics-server:
   enabled: true
+  args:
+    - --kubelet-insecure-tls
+
+# ─── AWS EBS CSI driver (StorageClass EBS cho Postgres PVC) ───
 aws-ebs-csi-driver:
   enabled: true
-cert-manager:
-  enabled: true
-  installCRDs: true
 
-# ── Lưu ý bảo mật ──
-# Grafana admin password KHÔNG set ở đây — đọc từ Vault qua Vault Agent Injector
-# (xem helm/_base templates + deploy-web/helm/techshop values.yaml).
+# ─── Argo Rollouts (controller + CRD — cho template kind: Rollout) ───
+argo-rollouts:
+  enabled: true
+
+# ─── cert-manager — Ansible ĐÃ cài (CRDs + manifest + ClusterIssuer) ───
+# Tắt subchart để không trùng/đè CRD.
+cert-manager:
+  enabled: false
+  installCRDs: false

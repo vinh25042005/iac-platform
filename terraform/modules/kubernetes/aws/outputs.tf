@@ -1,5 +1,5 @@
 output "master_public_ip" {
-  value = aws_instance.node[0].public_ip
+  value = aws_instance.node[var.master_node_index].public_ip
 }
 
 output "node_instance_ids" {

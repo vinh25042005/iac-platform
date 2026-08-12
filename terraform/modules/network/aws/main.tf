@@ -1,6 +1,5 @@
 # Module network (AWS) — VPC 2 tầng public/private + NAT + Security Groups
-# Port từ deploy-web/terraform/modules/network — chuẩn hoá với iac-platform:
-#   - project/env thay project_name
+#   - project/env xác định tên resource
 #   - count/list thay vì resource tách a/b
 #   - SG dùng dynamic block + CIDR giới hạn (least privilege)
 terraform {

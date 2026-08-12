@@ -1,4 +1,4 @@
-# Module kubernetes (AWS) — kubeadm self-managed cluster (port từ deploy-web)
+# Module kubernetes (AWS) — kubeadm self-managed cluster
 #   node[0] = master (public subnet, có public IP — kubeadm init + NLB upstream)
 #   node[1..] = workers (private subnet, qua NAT ra internet, join qua SSM)
 #   Kubeconfig + join commands upload lên SSM (prefix /k8s/<project>-<env>/)
@@ -53,8 +53,8 @@ resource "aws_iam_role_policy" "node_ssm_params" {
         Resource = "arn:aws:ssm:${var.region}:*:parameter/k8s/${var.project}-${var.env}/*"
       },
       {
-        Effect   = "Allow"
-        Action   = [
+        Effect = "Allow"
+        Action = [
           "ec2:CreateVolume", "ec2:DeleteVolume", "ec2:DescribeVolumes",
           "ec2:AttachVolume", "ec2:DetachVolume", "ec2:DescribeInstances",
           "ec2:CreateTags", "ec2:DescribeTags", "ec2:DescribeAvailabilityZones",
@@ -63,8 +63,8 @@ resource "aws_iam_role_policy" "node_ssm_params" {
         Resource = "*"
       },
       {
-        Effect   = "Allow"
-        Action   = ["s3:ListBucket", "s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
+        Effect = "Allow"
+        Action = ["s3:ListBucket", "s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
         Resource = [
           "arn:aws:s3:::${var.backup_bucket_name}",
           "arn:aws:s3:::${var.backup_bucket_name}/*"
@@ -84,13 +84,15 @@ resource "aws_iam_instance_profile" "node_ssm" {
   role = aws_iam_role.node_ssm.name
 }
 
-# ── Node[0] = master (public subnet, public IP); node[1..] = workers (private) ──
+# ── Node[master_node_index] = master (public subnet, public IP);
+#    các node còn lại = workers (private subnet, qua NAT ra internet) ──
+# Worker thứ w (w = số thứ tự trong danh sách worker, bỏ qua node master) → private subnet.
 resource "aws_instance" "node" {
   count                  = var.node_count
   ami                    = data.aws_ami.ubuntu.id
   iam_instance_profile   = aws_iam_instance_profile.node_ssm.name
   instance_type          = var.instance_type
-  subnet_id              = count.index == 0 ? var.public_subnet_id : var.private_subnet_ids[(count.index - 1) % length(var.private_subnet_ids)]
+  subnet_id              = count.index == var.master_node_index ? var.public_subnet_id : var.private_subnet_ids[(count.index < var.master_node_index ? count.index : count.index - 1) % length(var.private_subnet_ids)]
   vpc_security_group_ids = var.sg_ids
   key_name               = var.key_name
 
@@ -101,25 +103,27 @@ resource "aws_instance" "node" {
 
   # K8s cài qua Ansible (không dùng user_data)
   tags = {
-    Name = count.index == 0 ? "${var.project}-${var.env}-master" : "${var.project}-${var.env}-worker-${count.index}"
-    Role = count.index == 0 ? "master" : "worker"
+    Name = count.index == var.master_node_index ? "${var.project}-${var.env}-master" : "${var.project}-${var.env}-worker-${count.index}"
+    Role = count.index == var.master_node_index ? "master" : "worker"
   }
 }
 
 # ── Generate Ansible inventory (INI format) ──
-#   master: public IP trực tiếp
-#   workers: private IP, qua ProxyJump (bastion = master public IP)
+#   master: public IP trực tiếp (node[master_node_index])
+#   workers: các node còn lại (private IP, qua ProxyJump bastion = master public IP)
 resource "local_file" "ansible_inventory" {
   content = templatefile("${path.module}/inventory.tpl", {
-    project      = var.project
-    env          = var.env
-    master_ip    = aws_instance.node[0].public_ip
+    project   = var.project
+    env       = var.env
+    master_ip = aws_instance.node[var.master_node_index].public_ip
     worker_hosts = [
-      for i in range(1, var.node_count) : {
-        name       = "${var.project}-${var.env}-worker-${i}"
+      for i in range(0, var.node_count) :
+      {
+        name       = i == var.master_node_index ? "${var.project}-${var.env}-master" : "${var.project}-${var.env}-worker-${i}"
         private_ip = aws_instance.node[i].private_ip
-        bastion    = aws_instance.node[0].public_ip
+        bastion    = aws_instance.node[var.master_node_index].public_ip
       }
+      if i != var.master_node_index
     ]
     key_file = "~/.ssh/${var.key_name}.pem"
   })

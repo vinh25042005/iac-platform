@@ -20,6 +20,7 @@ import { Header, Container } from '@backstage/ui';
 import { useProjectsApi, Project } from '../../api';
 import { CreateProjectPage } from '../CreateProjectPage/CreateProjectPage';
 import { ApplyLogDialog } from '../ApplyLogDialog/ApplyLogDialog';
+import { ProjectDetailsPage } from '../ProjectDetailsPage/ProjectDetailsPage';
 
 export const ProjectsListPage = () => {
   const api = useProjectsApi();
@@ -27,10 +28,20 @@ export const ProjectsListPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  // Điều hướng nội bộ: đang xem chi tiết project nào (null = ở danh sách)
+  const [detailsProject, setDetailsProject] = useState<Project | null>(null);
   const [iaState, setIaState] = useState<Record<string, { loading: boolean; msg: string }>>({});
   const [applyEnv, setApplyEnv] = useState<Record<string, string>>({});
   const [applyTarget, setApplyTarget] = useState<{ id: string; name: string; env: string } | null>(null);
   const [destroyTarget, setDestroyTarget] = useState<{ id: string; name: string; env: string } | null>(null);
+  // Các job apply/destroy (đang/đã chạy) — để hiện badge + mở lại log nếu lỡ đóng dialog
+  const [jobs, setJobs] = useState<
+    { id: string; status: string; project: string; env: string; mode: string }[]
+  >([]);
+  const [logTarget, setLogTarget] = useState<
+    | { id: string; name: string; env: string; jobId: string; mode: 'apply' | 'destroy' }
+    | null
+  >(null);
 
   async function load() {
     setLoading(true);
@@ -44,8 +55,21 @@ export const ProjectsListPage = () => {
     }
   }
 
+  // Poll danh sách job mỗi 5s → cập nhật badge "đang chạy" + nút mở lại log
+  async function loadJobs() {
+    try {
+      const all = await api.listApplyJobs();
+      setJobs(all);
+    } catch (e) {
+      /* im lặng — job chỉ là phụ, không làm hỏng UI */
+    }
+  }
+
   useEffect(() => {
     load();
+    loadJobs();
+    const t = setInterval(loadJobs, 5000);
+    return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api]);
 
@@ -77,6 +101,16 @@ export const ProjectsListPage = () => {
     }
   }
 
+  // Điều hướng nội bộ ưu tiên: chi tiết project → create → danh sách
+  if (detailsProject) {
+    return (
+      <ProjectDetailsPage
+        project={detailsProject}
+        onBack={() => setDetailsProject(null)}
+      />
+    );
+  }
+
   if (showCreate) {
     return <CreateProjectPage onCreated={handleCreated} />;
   }
@@ -105,7 +139,21 @@ export const ProjectsListPage = () => {
     return projects.map(p => (
       <TableRow key={p.id}>
         <TableCell>{p.id}</TableCell>
-        <TableCell>{p.name}</TableCell>
+        <TableCell>
+          <Button
+            size="small"
+            style={{
+              textTransform: 'none',
+              fontWeight: 600,
+              padding: 0,
+              minWidth: 0,
+              cursor: 'pointer',
+            }}
+            onClick={() => setDetailsProject(p)}
+          >
+            {p.name}
+          </Button>
+        </TableCell>
         <TableCell>{p.owner}</TableCell>
         <TableCell>{p.jenkinsInstance}</TableCell>
         <TableCell>
@@ -123,6 +171,14 @@ export const ProjectsListPage = () => {
         <TableCell>
           <Box display="flex" flexDirection="column" alignItems="flex-start">
             <Box display="flex">
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => setDetailsProject(p)}
+                style={{ marginRight: 4 }}
+              >
+                Details
+              </Button>
               <Button
                 size="small"
                 variant="outlined"
@@ -173,7 +229,36 @@ export const ProjectsListPage = () => {
               >
                 Destroy
               </Button>
+              {/* Nút mở lại log job của project này (đang chạy hoặc đã xong) */}
+              {jobs
+                .filter(j => j.project === p.slug)
+                .slice(0, 3)
+                .map(j => (
+                  <Button
+                    key={j.id}
+                    size="small"
+                    variant="outlined"
+                    color={j.status === 'running' ? 'primary' : 'default'}
+                    style={{ marginLeft: 4 }}
+                    onClick={() =>
+                      setLogTarget({
+                        id: p.id,
+                        name: p.name,
+                        env: j.env,
+                        jobId: j.id,
+                        mode: j.mode === 'destroy' ? 'destroy' : 'apply',
+                      })
+                    }
+                  >
+                    {j.status === 'running' ? '🟢' : '📄'} {j.env}:{j.mode === 'destroy' ? 'dest' : 'ap'}
+                  </Button>
+                ))}
             </Box>
+            {jobs.some(j => j.project === p.slug && j.status === 'running') && (
+              <Typography variant="caption" style={{ color: '#2e7d32' }}>
+                ● Đang chạy terraform — bấm nút xanh để xem log realtime
+              </Typography>
+            )}
             {iaState[p.id]?.msg && (
               <Typography variant="caption" color="textSecondary">
                 {iaState[p.id].msg}
@@ -187,7 +272,7 @@ export const ProjectsListPage = () => {
 
   return (
     <>
-      <Header title="Projects" subtitle="Manage infrastructure projects across all environments" />
+      <Header title="Projects" description="Manage infrastructure projects across all environments" />
       <Container>
         {error && (
           <Box mb={2} p={2} style={{ background: '#fdecea', borderRadius: 4 }}>
@@ -245,6 +330,18 @@ export const ProjectsListPage = () => {
           env={destroyTarget.env}
           mode="destroy"
           onClose={() => setDestroyTarget(null)}
+        />
+      )}
+      {/* Mở lại log của job đã có (lỡ đóng dialog) — view mode, không start mới */}
+      {logTarget && (
+        <ApplyLogDialog
+          open
+          projectId={logTarget.id}
+          projectName={logTarget.name}
+          env={logTarget.env}
+          mode={logTarget.mode}
+          initialJobId={logTarget.jobId}
+          onClose={() => setLogTarget(null)}
         />
       )}
     </>

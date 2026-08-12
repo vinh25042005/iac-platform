@@ -5167,6 +5167,7 @@ __metadata:
     "@types/supertest": "npm:^2.0.12"
     express: "npm:^4.14.0"
     express-promise-router: "npm:^4.1.0"
+    js-yaml: "npm:^4.1.0"
     supertest: "npm:^6.2.4"
     zod: "npm:^3.25.76 || ^4.0.0"
   languageName: unknown

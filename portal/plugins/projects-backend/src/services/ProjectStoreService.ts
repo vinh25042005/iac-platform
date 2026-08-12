@@ -19,6 +19,23 @@ export interface Project {
   jenkinsInstance: string;
   keyName: string;
   status: string; // active | archived
+  // GitOps repo chứa helm chart + argocd apps (điền khi tạo project).
+  // ArgoCD app + Jenkins dùng repo này. Mặc định iac-platform (repo có helm/_base).
+  repoUrl: string;
+  // Cụm kubeadm: tổng số node + node nào làm master (tùy chọn trên UI khi tạo).
+  nodeCount: number;
+  masterNodeIndex: number;
+  // Loại máy EC2 (t3.small / t3.medium / t3.large...) — chọn trên UI khi tạo.
+  instanceType: string;
+  // ── Jenkins job params (default hiển thị sẵn trên Jenkins UI) ──
+  appRepo: string;          // repo mã nguồn app → param APP_REPO
+  registryBase: string;     // docker registry base → param REGISTRY_BASE
+  imageRepoPrefix: string;  // tiền tố image → param IMAGE_REPO_PREFIX
+  vaultEip: string;         // Vault EIP → param VAULT_EIP
+  deployBranch: string;     // branch deploy-web ArgoCD track → param DEPLOY_BRANCH
+  // Môi trường được chọn khi tạo project + các service (backend/frontend/database)
+  envs: string[];
+  services: string[];
 }
 
 export interface JenkinsInstance {
@@ -76,6 +93,58 @@ export class ProjectStoreService {
       });
     }
 
+    // Migration: thêm cột envs/services (JSON text) cho bảng cũ
+    const hasEnvs = await client.schema.hasColumn(TABLE_PROJECTS, 'envs');
+    if (!hasEnvs) {
+      await client.schema.alterTable(TABLE_PROJECTS, table => {
+        table.text('envs');
+      });
+    }
+    const hasServices = await client.schema.hasColumn(TABLE_PROJECTS, 'services');
+    if (!hasServices) {
+      await client.schema.alterTable(TABLE_PROJECTS, table => {
+        table.text('services');
+      });
+    }
+
+    // Migration: thêm cột repoUrl (GitOps repo — điền khi tạo project)
+    const hasRepoUrl = await client.schema.hasColumn(TABLE_PROJECTS, 'repoUrl');
+    if (!hasRepoUrl) {
+      await client.schema.alterTable(TABLE_PROJECTS, table => {
+        table.string('repoUrl');
+      });
+    }
+
+    // Migration: nodeCount / masterNodeIndex (cấu hình cụm kubeadm)
+    const hasNodeCount = await client.schema.hasColumn(TABLE_PROJECTS, 'nodeCount');
+    if (!hasNodeCount) {
+      await client.schema.alterTable(TABLE_PROJECTS, table => {
+        table.integer('nodeCount');
+      });
+    }
+    const hasMasterIdx = await client.schema.hasColumn(TABLE_PROJECTS, 'masterNodeIndex');
+    if (!hasMasterIdx) {
+      await client.schema.alterTable(TABLE_PROJECTS, table => {
+        table.integer('masterNodeIndex');
+      });
+    }
+
+    // Migration: instanceType + các jenkins param default
+    const hasInstanceType = await client.schema.hasColumn(TABLE_PROJECTS, 'instanceType');
+    if (!hasInstanceType) {
+      await client.schema.alterTable(TABLE_PROJECTS, table => {
+        table.string('instanceType');
+      });
+    }
+    for (const col of ['appRepo', 'registryBase', 'imageRepoPrefix', 'vaultEip', 'deployBranch']) {
+      const has = await client.schema.hasColumn(TABLE_PROJECTS, col);
+      if (!has) {
+        await client.schema.alterTable(TABLE_PROJECTS, table => {
+          table.string(col);
+        });
+      }
+    }
+
     const hasJenkins = await client.schema.hasTable(TABLE_JENKINS);
     if (!hasJenkins) {
       await client.schema.createTable(TABLE_JENKINS, table => {
@@ -102,6 +171,15 @@ export class ProjectStoreService {
   }
 
   #toProject(row: any): Project {
+    const parse = (v: any, fallback: string[]) => {
+      if (!v) return fallback;
+      try {
+        const arr = JSON.parse(v);
+        return Array.isArray(arr) && arr.length > 0 ? arr : fallback;
+      } catch {
+        return fallback;
+      }
+    };
     return {
       id: row.id,
       name: row.name,
@@ -112,6 +190,17 @@ export class ProjectStoreService {
       jenkinsInstance: row.jenkinsInstance ?? '',
       keyName: row.keyName ?? '',
       status: row.status,
+      repoUrl: row.repoUrl ?? '',
+      nodeCount: row.nodeCount ?? 3,
+      masterNodeIndex: row.masterNodeIndex ?? 0,
+      instanceType: row.instanceType ?? 't3.small',
+      appRepo: row.appRepo ?? `https://github.com/vinh25042005/${row.slug}.git`,
+      registryBase: row.registryBase ?? 'docker.io/vinh2504',
+      imageRepoPrefix: row.imageRepoPrefix ?? row.slug,
+      vaultEip: row.vaultEip ?? '52.221.18.86',
+      deployBranch: row.deployBranch ?? 'week-6-argo-rollouts',
+      envs: parse(row.envs, ['dev', 'stg', 'prd']),
+      services: parse(row.services, ['backend', 'frontend', 'database']),
     };
   }
 
@@ -141,6 +230,17 @@ export class ProjectStoreService {
       jenkinsInstance: p.jenkinsInstance,
       keyName: p.keyName,
       status: p.status || 'active',
+      repoUrl: p.repoUrl ?? '',
+      nodeCount: p.nodeCount ?? 3,
+      masterNodeIndex: p.masterNodeIndex ?? 0,
+      instanceType: p.instanceType ?? 't3.small',
+      appRepo: p.appRepo ?? '',
+      registryBase: p.registryBase ?? 'docker.io/vinh2504',
+      imageRepoPrefix: p.imageRepoPrefix ?? '',
+      vaultEip: p.vaultEip ?? '52.221.18.86',
+      deployBranch: p.deployBranch ?? 'main',
+      envs: JSON.stringify(p.envs ?? ['dev', 'stg', 'prd']),
+      services: JSON.stringify(p.services ?? ['backend', 'frontend', 'database']),
     });
     return this.getProject(id);
   }
@@ -160,6 +260,17 @@ export class ProjectStoreService {
         jenkinsInstance: p.jenkinsInstance ?? existing.jenkinsInstance,
         keyName: p.keyName ?? existing.keyName,
         status: p.status ?? existing.status,
+        repoUrl: p.repoUrl ?? existing.repoUrl,
+        nodeCount: p.nodeCount ?? existing.nodeCount,
+        masterNodeIndex: p.masterNodeIndex ?? existing.masterNodeIndex,
+        instanceType: p.instanceType ?? existing.instanceType,
+        appRepo: p.appRepo ?? existing.appRepo,
+        registryBase: p.registryBase ?? existing.registryBase,
+        imageRepoPrefix: p.imageRepoPrefix ?? existing.imageRepoPrefix,
+        vaultEip: p.vaultEip ?? existing.vaultEip,
+        deployBranch: p.deployBranch ?? existing.deployBranch,
+        envs: JSON.stringify(p.envs ?? existing.envs),
+        services: JSON.stringify(p.services ?? existing.services),
       })
       .where('id', '=', id);
     return this.getProject(id);

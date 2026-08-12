@@ -119,7 +119,7 @@ catalog:
       rules:
         - allow: [User, Group]
 
-    # ── iac-platform: catalog các project + env (giống CatalogHub Projects list) ──
+    # ── iac-platform: catalog các project + env ──
     - type: file
       target: ../../catalog/iac-platform.yaml
       rules:
