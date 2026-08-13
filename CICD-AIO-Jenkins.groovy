@@ -348,7 +348,11 @@ def runInitialization() {
   currentBuild.description = "Branch: ${params.BRANCH_CODE}"
 
   def initMessage = "Pipeline for ${params.PROJECT_NAME} ${params.ERP_APP_NAME} - ${params.ENVIRONMENT} - ${params.LOCATION} ${params.CLIENT_LOCATION} has been started."
-  office365ConnectorSend message: initMessage, status: 'STARTED', webhookUrl: "${env.TEAMS_WEBHOOK_URL}"
+  if (env.TEAMS_WEBHOOK_URL?.trim()) {
+    office365ConnectorSend message: initMessage, status: 'STARTED', webhookUrl: "${env.TEAMS_WEBHOOK_URL}"
+  } else {
+    echo "TEAMS_WEBHOOK_URL rỗng - bỏ qua gửi thông báo Teams (STARTED)"
+  }
 }
 
 // Stage: Select Execution Mode
@@ -817,7 +821,11 @@ def runWorkFlowProcess() {
 // Post-Success Action
 def runPostSuccess() {
   def successMessage = "${params.ERP_APP_NAME} - ${currentBuild.displayName} --- succeeded!"
-  office365ConnectorSend message: successMessage, status: 'SUCCESS', webhookUrl: "${env.TEAMS_WEBHOOK_URL}"
+  if (env.TEAMS_WEBHOOK_URL?.trim()) {
+    office365ConnectorSend message: successMessage, status: 'SUCCESS', webhookUrl: "${env.TEAMS_WEBHOOK_URL}"
+  } else {
+    echo "TEAMS_WEBHOOK_URL rỗng - bỏ qua gửi thông báo Teams (SUCCESS)"
+  }
 }
 
 // Post-Failure Action
@@ -869,16 +877,20 @@ def runPostFailure() {
     ]
   ]
 
-  try {
-    httpRequest(
-      httpMode: 'POST',
-      contentType: 'APPLICATION_JSON',
-      requestBody: JsonOutput.toJson(payload),
-      url: "${env.TEAMS_WEBHOOK_URL}",
-      ignoreSslErrors: true
-    )
-  } catch (Exception webhookEx) {
-    echo "WARNING: Failed to send detailed error to webhook: ${webhookEx.getMessage()}"
+  if (env.TEAMS_WEBHOOK_URL?.trim()) {
+    try {
+      httpRequest(
+        httpMode: 'POST',
+        contentType: 'APPLICATION_JSON',
+        requestBody: JsonOutput.toJson(payload),
+        url: "${env.TEAMS_WEBHOOK_URL}",
+        ignoreSslErrors: true
+      )
+    } catch (Exception webhookEx) {
+      echo "WARNING: Failed to send detailed error to webhook: ${webhookEx.getMessage()}"
+    }
+  } else {
+    echo "TEAMS_WEBHOOK_URL rỗng - bỏ qua gửi chi tiết lỗi qua webhook"
   }
 }
 
@@ -1360,17 +1372,21 @@ def sendConfigureLogToWebhook(logContent, successCount, failedCount, totalCount,
     ]
   ]
 
-  try {
-    httpRequest(
-      httpMode: 'POST',
-      contentType: 'APPLICATION_JSON',
-      requestBody: JsonOutput.toJson(payload),
-      url: "${env.TEAMS_WEBHOOK_URL}",
-      ignoreSslErrors: true
-    )
-    echo "Configure log sent to Teams webhook successfully."
-  } catch (Exception webhookEx) {
-    echo "WARNING: Failed to send configure log to webhook: ${webhookEx.getMessage()}"
+  if (env.TEAMS_WEBHOOK_URL?.trim()) {
+    try {
+      httpRequest(
+        httpMode: 'POST',
+        contentType: 'APPLICATION_JSON',
+        requestBody: JsonOutput.toJson(payload),
+        url: "${env.TEAMS_WEBHOOK_URL}",
+        ignoreSslErrors: true
+      )
+      echo "Configure log sent to Teams webhook successfully."
+    } catch (Exception webhookEx) {
+      echo "WARNING: Failed to send configure log to webhook: ${webhookEx.getMessage()}"
+    }
+  } else {
+    echo "TEAMS_WEBHOOK_URL rỗng - bỏ qua gửi configure log"
   }
 }
 
@@ -1514,13 +1530,17 @@ def sendLogToTeams(logContent, stageType) {
         "text"    : "Log output from the Unit Test process:\n```${logContent}```"
     ]
     
-    httpRequest(
-        httpMode: 'POST',
-        contentType: 'APPLICATION_JSON',
-        requestBody: JsonOutput.toJson(payload),
-        url: webhookUrl,
-        ignoreSslErrors: true
-    )
+    if (webhookUrl?.trim()) {
+        httpRequest(
+            httpMode: 'POST',
+            contentType: 'APPLICATION_JSON',
+            requestBody: JsonOutput.toJson(payload),
+            url: webhookUrl,
+            ignoreSslErrors: true
+        )
+    } else {
+        echo "TEAMS_WEBHOOK_URL rỗng - bỏ qua gửi unit test log"
+    }
 }
 
 def scaleDownUnitTestDeployment() {
