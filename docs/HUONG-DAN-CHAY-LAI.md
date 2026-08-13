@@ -242,6 +242,22 @@ Khi deploy lên cluster mới, cần credential kubeconfig mới:
 
 ---
 
+## Webhook tự động CI khi dev push (không cần chạy tay)
+
+Đã cài **tự động chạy CI** khi dev push code lên GitLab — không phải bấm "Build with Parameters" mỗi lần:
+
+```
+Dev push → GitLab webhook → job gitlab-webhook-ci (tự nhận) → tự trigger all_in_one (dev) → build+push image
+```
+
+- **Job `gitlab-webhook-ci`** trên Dashboard là job trung gian (nhận webhook, lấy project + branch, tự trigger `all_in_one`).
+- **GitLab → Settings → Webhooks** đã đăng ký URL `http://47.130.241.226:9090/generic-webhook-trigger/invoke?token=...` (Push events).
+- **Kết quả trên UI:** mỗi lần dev push, trong **Build History** của `all_in_one` sẽ tự xuất hiện build mới (ENV=dev, đúng branch) — chỉ cần vào xem Console Output / Stage View, không cần điền gì.
+- Muốn tắt: vào job `gitlab-webhook-ci` → **Disable** (hoặc xoá webhook trong GitLab).
+- Chi tiết kỹ thuật + lưu ý bảo mật: xem mục 6b trong báo cáo.
+
+---
+
 ## 7. Mẹo & lưu ý
 
 - Đọc kết quả nhanh nhất bằng **màu Stage View**: xanh = OK, đỏ = lỗi, xám = bỏ qua, vàng = đang chạy.

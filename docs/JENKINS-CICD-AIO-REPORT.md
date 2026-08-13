@@ -141,8 +141,30 @@ Xem thêm `docs/screenshots/README.md` + ảnh trong `docs/screenshots/`.
 
 ## 6. Trạng thái hiện tại của Jenkins (sau khi dọn Jenkinsfile cũ)
 
-- **Job duy nhất:** `all_in_one` → Pipeline from SCM → `CICD-AIO-Jenkins.groovy` (GitHub `iac-platform`, branch `main`)
-- **Credentials:** 5 (`gitlab-token`, `gitlab-registry-auth`, `vault-token`, `dc-kubeconfig`, `demo-kubeconfig`)
+- **Job chính:** `all_in_one` → Pipeline from SCM → `CICD-AIO-Jenkins.groovy` (GitHub `iac-platform`, branch `main`)
+- **Credentials:** 6 (`gitlab-token`, `gitlab-registry-auth`, `vault-token`, `dc-kubeconfig`, `demo-kubeconfig`, `dr-kubeconfig`)
 - **Đã xoá:** 3 job cũ (`123-ci`, `techshop-ci`, `test123-ci`) + 3 credential cũ (`vault-approle-jenkins`, `github-token`, `github-token-secret`)
 - **Jenkinsfile cũ** (root) đã xoá khỏi repo
-- Plugin cũ (`hashicorp-vault`, `generic-webhook-trigger`, `github*`) vẫn cài nhưng không dùng cho pipeline mới
+
+## 6b. Webhook tự động CI khi dev push (Generic Webhook Trigger)
+
+> Giải quyết bài toán: dev push code liên tục → KHÔNG phải nhờ devops chạy CI tay từng lần.
+> **KHÔNG sửa file `CICD-AIO-Jenkins.groovy`** — dùng 1 job receiver riêng.
+
+**Luồng hoạt động:**
+```
+GitLab push → webhook POST http://47.130.241.226:9090/generic-webhook-trigger/invoke?token=...
+  → job gitlab-webhook-ci (receiver, GenericTrigger) extract PROJECT + branch từ payload
+  → tự trigger all_in_one (PROJECT_NAME=techshop, ENVIRONMENT=dev, BRANCH_CODE=<branch>,
+    ENABLED_STAGES=["CheckSource","company-get-vault","build-push"]) → build+push image
+```
+
+**Cấu hình đã làm (đã test thành công — receiver #4/#5, all_in_one #37/#38 SUCCESS, image `dev-37`/`dev-38`):**
+- Job `gitlab-webhook-ci` (Pipeline inline): `GenericTrigger` token + `genericVariables` (JSONPath `$.project.path_with_namespace`, `$.ref`).
+  - ⚠️ Quan trọng: GenericVariable khai báo bằng **`value:`** (KHÔNG phải `expression:`) — `[key: 'X', value: '$.json.path']`.
+  - ⚠️ Sau khi sửa config job, phải **chạy job 1 lần** để trigger đăng ký token (nếu không webhook trả 404).
+- GitLab webhook: project `techshop-app` → URL `http://47.130.241.226:9090/generic-webhook-trigger/invoke?token=<token>` (push_events=true, ssl=false).
+- Mở SG port 9090 cho `0.0.0.0/0` (GitLab.com không có dải IP tĩnh cho webhook — cần mở internet để GitLab gọi tới).
+- Token webhook lưu trong job config `gitlab-webhook-ci` + URL webhook trong GitLab (KHÔNG commit vào repo).
+
+**Lưu ý bảo mật:** port 9090 đang mở ra internet cho toàn bộ (để GitLab webhook tới được). Với môi trường production nên giới hạn lại (VD qua reverse proxy, IP allowlist, hoặc HTTPS).
