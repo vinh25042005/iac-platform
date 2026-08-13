@@ -29,7 +29,6 @@
   shell: |
     aws ssm delete-parameter --name "{{ ssm_prefix }}/join-command" --region {{ aws_region.stdout }} 2>/dev/null || true
     aws ssm delete-parameter --name "{{ ssm_prefix }}/worker-join-command" --region {{ aws_region.stdout }} 2>/dev/null || true
-    aws ssm delete-parameter --name "{{ ssm_prefix }}/kubeconfig" --region {{ aws_region.stdout }} 2>/dev/null || true
   changed_when: false
 
 - name: Run kubeadm init
@@ -83,14 +82,7 @@
       --type String --overwrite --region {{ aws_region.stdout }}
   changed_when: false
 
-- name: Upload kubeconfig to SSM (gzip+base64, Advanced tier)
-  shell: |
-    KUBECONFIG_B64=$(cat $HOME/.kube/config | gzip | base64 -w0)
-    aws ssm put-parameter --name "{{ ssm_prefix }}/kubeconfig" --value "$KUBECONFIG_B64" \
-      --tier Advanced --type String --overwrite --region {{ aws_region.stdout }}
-  changed_when: false
-
-# ── Kubeconfig → VAULT (nguồn chuẩn — pipeline/terraform đọc từ Vault, không phải SSM) ──
+# ── Kubeconfig → VAULT (nguồn chuẩn — pipeline/terraform đọc từ Vault, KHÔNG dùng SSM) ──
 #   KV v2 path: secret/k8s/<project>-<env>, key: kubeconfig (nội dung thô).
 #   Cần truyền -e vault_addr=... -e vault_token=... từ terraform (new-project.sh ghi tfvars).
 - name: Upload kubeconfig to Vault (KV v2 — nguồn chuẩn thay SSM)

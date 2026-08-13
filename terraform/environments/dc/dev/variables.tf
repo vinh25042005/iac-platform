@@ -120,6 +120,19 @@ variable "rancher_bootstrap_password" {
   description = "Bootstrap password Rancher (đổi trong production)"
 }
 
+# ── Vault (lưu kubeconfig — nguồn chuẩn thay SSM) ──
+variable "vault_addr" {
+  type    = string
+  default = ""
+  description = "Vault URL — ansible push kubeconfig lên secret/k8s/<project>-<env>, terraform đọc lại từ Vault"
+}
+variable "vault_token" {
+  type        = string
+  default     = ""
+  sensitive   = true
+  description = "Vault token (có quyền ghi secret/k8s/*)"
+}
+
 # ── ArgoCD (chọn false khi muốn cluster K8s trần — deploy bằng kubectl/helm trực tiếp) ──
 variable "enable_argocd" {
   type        = bool

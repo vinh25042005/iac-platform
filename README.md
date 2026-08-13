@@ -46,7 +46,7 @@ iac-platform/
 
 Giống cụm deploy-web: `node[0]` = master (public subnet), `node[1..]` = worker (private subnet).
 Terraform dựng: VPC + EC2 + NLB + Ansible boot kubeadm (Calico, cert-manager, ArgoCD).
-Kubeconfig + join command lưu SSM `/k8s/<project>-<env>/` — pipeline self-heal mỗi lần apply.
+Kubeconfig lưu **VAULT** `secret/k8s/<project>-<env>` (nguồn chuẩn — pipeline/terraform đọc từ Vault); join command lưu SSM cho worker join.
 
 ## Bắt đầu nhanh
 

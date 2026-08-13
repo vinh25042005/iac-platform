@@ -235,6 +235,8 @@ resource "null_resource" "ansible" {
         echo ">>> [Ansible attempt $i/3] BAT DAU - cum moi thuong mat 10-15 phut"
         if timeout 900 ansible-playbook -i inventories/${var.project}-${var.env}.ini \
             playbooks/k8s-cluster.yml -e project=${var.project} -e env=${var.env} \
+            -e install_argocd=${var.enable_argocd} \
+            -e vault_addr=${var.vault_addr} -e vault_token=${var.vault_token}; then
             -e install_argocd=${var.enable_argocd}; then
           echo ">>> [Ansible attempt $i/3] THANH CONG"
           echo ">>> Ansible OK"
@@ -257,23 +259,23 @@ resource "terraform_data" "wait_k8s_api" {
     command = <<-EOT
       set -e
       export KUBECONFIG="$HOME/.kube/config"
-      SSM_NAME="/k8s/${var.project}-${var.env}/kubeconfig"
+      VAULT_ADDR="${var.vault_addr}"
+      VAULT_TOKEN="${var.vault_token}"
+      VK="secret/data/k8s/${var.project}-${var.env}"
       for i in $(seq 1 30); do
-        SSM_KUBECONFIG=$(aws ssm get-parameter --name "$SSM_NAME" \
-          --with-decryption --region ${var.region} \
-          --query Parameter.Value --output text 2>/dev/null || echo "")
-        if [ -n "$SSM_KUBECONFIG" ]; then
-          echo "$SSM_KUBECONFIG" | base64 -d | gunzip > "$HOME/.kube/config"
+        KC=$(curl -sk -H "X-Vault-Token: $VAULT_TOKEN" "$VAULT_ADDR/v1/$VK" 2>/dev/null | jq -r '.data.data.kubeconfig // empty' 2>/dev/null)
+        if [ -n "$KC" ]; then
+          echo "$KC" > "$HOME/.kube/config"
           chmod 600 "$HOME/.kube/config"
           if kubectl get ns >/dev/null 2>&1; then
-            echo ">>> Kubeconfig OK (từ SSM $SSM_NAME)"
+            echo ">>> Kubeconfig OK (từ Vault $VK)"
             exit 0
           fi
         fi
-        echo "  chờ kubeconfig SSM (retry $i/30)..."
+        echo "  chờ kubeconfig Vault (retry $i/30)..."
         sleep 10
       done
-      echo ">>> Không lấy được kubeconfig từ SSM"
+      echo ">>> Không lấy được kubeconfig từ Vault"
       exit 1
     EOT
   }

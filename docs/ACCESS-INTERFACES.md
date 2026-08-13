@@ -69,5 +69,5 @@
   ```
 
 ## Ghi chú chung
-- Kubeconfig cluster: lấy từ SSM `/k8s/test123-dev/kubeconfig` (giải nén gzip+base64)
+- Kubeconfig cluster: lấy từ **Vault** `secret/k8s/<project>-<env>` (ansible push tự động khi tạo cluster)
 - Các UI trong cluster (Grafana/Prometheus/ArgoCD) truy cập bằng **port-forward** vì chưa có ingress; muốn truy cập qua domain thì cấu hình host trong `helm/_base/values/<project>/values.yaml` (`ingress.host`, `monitoring.grafanaHost`) rồi sync.
