@@ -1,7 +1,15 @@
-# Client-side test — CICD-AIO-Jenkins.groovy (chuẩn bị sẵn)
+# Client-side test — CICD-AIO-Jenkins.groovy
 
-> Trạng thái: **CẦN tạo DC cluster mới** (bạn chưa chốt tên project). Toàn bộ bước dưới đây sẽ
-> chạy sau khi có cluster. Company CI đã test xong (build 6–10 SUCCESS, xem `docs/screenshots/README.md`).
+> Trạng thái: ✅ **ĐÃ HOÀN THÀNH** (tự động, user "tự làm hết đi").
+> - DC cluster mới: project **`dc`** (tên tự chọn hợp lý), env `dev`, kubeadm 3 node, K8s 1.32,
+>   **`enable_argocd=false`** (cluster K8s trần — đúng ý "triển khai k8s thôi ko argocd").
+> - Option `enable_argocd` mới trong `scripts/new-project.sh` / `terraform/environments/_template/`
+>   / `ansible/playbooks/k8s-cluster.yml` (khi false → ansible bỏ qua cài ArgoCD, không tạo ArgoCD Application).
+> - Build test: #11 (Company CI, image sleep `dev-11`) + #13 (Client CD → deploy DC) đều **SUCCESS**.
+>   (Build #12 fail do thiếu plugin `pipeline-utility-steps` → đã cài.)
+> - Company CI build 6–10 SUCCESS — xem `docs/screenshots/README.md`.
+
+## 1. Quy ước tên (lấy từ `getNamingContext()` trong pipeline)
 
 ## 1. Quy ước tên (lấy từ `getNamingContext()` trong pipeline)
 
