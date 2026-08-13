@@ -247,14 +247,62 @@ Khi deploy lên cluster mới, cần credential kubeconfig mới:
 Đã cài **tự động chạy CI** khi dev push code lên GitLab — không phải bấm "Build with Parameters" mỗi lần:
 
 ```
-Dev push → GitLab webhook → job gitlab-webhook-ci (tự nhận) → tự trigger all_in_one (dev) → build+push image
+Dev push (branch dev) → GitLab webhook → HTTPS nginx proxy (8443) → job gitlab-webhook-ci
+  → lọc branch dev → tự trigger all_in_one (ENV=dev, BRANCH=dev) → build+push image
 ```
 
 - **Job `gitlab-webhook-ci`** trên Dashboard là job trung gian (nhận webhook, lấy project + branch, tự trigger `all_in_one`).
-- **GitLab → Settings → Webhooks** đã đăng ký URL `http://47.130.241.226:9090/generic-webhook-trigger/invoke?token=...` (Push events).
-- **Kết quả trên UI:** mỗi lần dev push, trong **Build History** của `all_in_one` sẽ tự xuất hiện build mới (ENV=dev, đúng branch) — chỉ cần vào xem Console Output / Stage View, không cần điền gì.
+- **GitLab → Settings → Webhooks** đã đăng ký URL `https://47.130.241.226:8443/generic-webhook-trigger/invoke?token=...` (Push events, SSL verification tắt — cert self-signed).
+- **Chỉ chạy khi push branch `dev`** (giống production — branch khác bị bỏ qua). Branch `dev` đã tạo trong repo techshop-app.
+- **Kết quả trên UI:** mỗi lần push dev, trong **Build History** của `all_in_one` sẽ tự xuất hiện build mới (ENV=dev, BRANCH=dev) — chỉ cần vào xem Console Output / Stage View, không cần điền gì.
 - Muốn tắt: vào job `gitlab-webhook-ci` → **Disable** (hoặc xoá webhook trong GitLab).
 - Chi tiết kỹ thuật + lưu ý bảo mật: xem mục 6b trong báo cáo.
+
+---
+
+## Cấu hình webhook bằng GIAO DIỆN (tự làm lần sau)
+
+### Phần A — Jenkins: tạo job nhận webhook
+
+1. Dashboard → **New Item** → tên `gitlab-webhook-ci` → chọn **Pipeline** → **OK**.
+2. Vào **Configure** job → mục **Pipeline** → **Definition** = **Pipeline script** → dán script (mẫu dưới).
+3. **Save**, rồi **chạy job 1 lần** để đăng ký token (nếu không, webhook trả HTTP 404).
+4. Kiểm tra: POST thử `https://<ip>:8443/generic-webhook-trigger/invoke?token=<TOKEN>` → nhận `200`.
+
+Mẫu phần **triggers** trong script (chính là điểm quan trọng nhất):
+
+```groovy
+triggers {
+  GenericTrigger(
+    token: '<TOKEN>',
+    printContributedVariables: true,
+    printPostContent: true,
+    silentResponse: false,
+    genericVariables: [
+      [key: 'GITLAB_PROJECT', value: '$.project.path_with_namespace'],
+      [key: 'GITLAB_REF', value: '$.ref']
+    ]
+  )
+}
+```
+
+> ⚠️ **GenericVariable khai báo bằng `value:`** — dùng `expression:` sẽ lỗi (NPE) khi load trigger.
+> ⚠️ Sau **mỗi lần sửa config** của job này, phải **chạy job 1 lần** để đăng ký lại token (nếu không webhook trả 404).
+
+### Phần B — GitLab: đăng ký webhook
+
+1. Project `techshop-app` → **Settings → Webhooks → Add new webhook**.
+2. **URL**: `https://47.130.241.226:8443/generic-webhook-trigger/invoke?token=<TOKEN>`.
+3. Tick **Push events** (muốn lọc branch có thể dùng Wildcard/Regex, nhưng hiện filter branch nằm trong Jenkins).
+4. **Bỏ tick "Enable SSL verification"** (vì cert self-signed).
+5. **Add webhook**. Kiểm tra bằng **Test → Push events** (nếu GitLab test API không dùng được thì push 1 commit thật lên branch `dev`).
+
+### Phần C — Bảo mật (đã cấu hình sẵn)
+
+- Jenkins admin (**9090**) **không mở** ra internet (SG chỉ allowlist IP cụ thể) — vào bằng SSH tunnel.
+- Webhook đi qua **nginx reverse proxy HTTPS** (port **8443**), chỉ forward đúng path `/generic-webhook-trigger/`; mọi path khác trả **403**.
+- GitLab webhook trỏ `https://47.130.241.226:8443/...` (cert self-signed, SSL verification tắt).
+- **Branch filter**: chỉ `dev` mới trigger CI (trong script receiver — branch khác echo "BO QUA" rồi dừng, không tạo build).
 
 ---
 
