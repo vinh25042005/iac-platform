@@ -90,6 +90,19 @@
       --tier Advanced --type String --overwrite --region {{ aws_region.stdout }}
   changed_when: false
 
+# ── Kubeconfig → VAULT (nguồn chuẩn — pipeline/terraform đọc từ Vault, không phải SSM) ──
+#   KV v2 path: secret/k8s/<project>-<env>, key: kubeconfig (nội dung thô).
+#   Cần truyền -e vault_addr=... -e vault_token=... từ terraform (new-project.sh ghi tfvars).
+- name: Upload kubeconfig to Vault (KV v2 — nguồn chuẩn thay SSM)
+  when: vault_token is defined and vault_token | default('') != ''
+  shell: |
+    PAYLOAD=$(jq -n --arg k "$(cat $HOME/.kube/config)" '{data:{kubeconfig:$k}}')
+    curl -sk -X POST -H "X-Vault-Token: {{ vault_token }}" -H "Content-Type: application/json" \
+      -d "$PAYLOAD" "{{ vault_addr }}/v1/secret/data/k8s/{{ project }}-{{ env }}" >/dev/null 2>&1
+    KC=$(curl -sk -H "X-Vault-Token: {{ vault_token }}" "{{ vault_addr }}/v1/secret/data/k8s/{{ project }}-{{ env }}" | jq -r '.data.data.kubeconfig // empty' 2>/dev/null)
+    [ -n "$KC" ] && echo ">>> Kubeconfig uploaded to Vault: secret/k8s/{{ project }}-{{ env }}" || echo "WARN: không push được kubeconfig lên Vault"
+  changed_when: false
+
 - name: Announce completion
   debug:
     msg: ">>> [MASTER] Cluster initialized! API: https://{{ master_public_ip }}:6443"

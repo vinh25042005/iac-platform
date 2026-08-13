@@ -126,3 +126,16 @@ variable "enable_argocd" {
   default     = true
   description = "Cài ArgoCD lên cluster hay không. false = cluster K8s trần (dùng cho CICD-AIO deploy qua kubectl set image, không cần ArgoCD)"
 }
+
+# ── Vault (lưu kubeconfig — nguồn chuẩn thay SSM) ──
+variable "vault_addr" {
+  type        = string
+  default     = ""
+  description = "Vault URL — ansible push kubeconfig lên secret/k8s/<project>-<env>, terraform đọc lại từ Vault"
+}
+variable "vault_token" {
+  type        = string
+  default     = ""
+  sensitive   = true
+  description = "Vault token (có quyền ghi secret/k8s/*)"
+}

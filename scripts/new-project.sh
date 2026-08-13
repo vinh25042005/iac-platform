@@ -32,6 +32,9 @@ ENABLE_RANCHER="${ENABLE_RANCHER:-false}"
 # ArgoCD — true: cài ArgoCD + tạo Application (mặc định).
 #       false: cluster K8s trần, deploy trực tiếp kubectl/helm (dùng cho CICD-AIO deploy).
 ENABLE_ARGOCD="${ENABLE_ARGOCD:-true}"
+# Vault — nơi lưu kubeconfig (nguồn chuẩn thay SSM). Truyền VAULT_ADDR + VAULT_TOKEN khi tạo project.
+VAULT_ADDR_ENV="${VAULT_ADDR:-}"
+VAULT_TOKEN_ENV="${VAULT_TOKEN:-}"
 # Loại máy EC2 — Backstage truyền qua env (chọn trên UI: t3.small/t3.medium/t3.large...)
 INSTANCE_TYPE="${INSTANCE_TYPE:-t3.small}"
 # Docker registry — Backstage truyền qua env REGISTRY_BASE (VD: docker.io/vinh2504).
@@ -67,6 +70,10 @@ enable_rancher = $ENABLE_RANCHER   # true → EC2 riêng chạy Rancher (ngoài 
 
 # ── ArgoCD ──
 enable_argocd = $ENABLE_ARGOCD     # false → cluster K8s trần (deploy kubectl/helm, không ArgoCD)
+
+# ── Vault (lưu kubeconfig — nguồn chuẩn thay SSM) ──
+vault_addr = "$VAULT_ADDR_ENV"   # VD https://52.221.18.86:8200
+vault_token = "$VAULT_TOKEN_ENV" # token có quyền ghi secret/k8s/*
 EOF
   echo "  ✅ $dst"
 done

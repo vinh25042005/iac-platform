@@ -34,7 +34,7 @@
 | `gitlab-token` | Secret text | GitLab PAT (full scope) | `GITLAB_ACCESS_TOKEN` — clone GitLab source |
 | `gitlab-registry-auth` | Secret file | `~/.docker/config.json` cho `registry.gitlab.com` | `REGISTRY_AUTH` — docker login/push |
 | `vault-token` | Secret text | Vault token (company Vault 52.221.18.86) | `COMPANY_VAULT_TOKEN`, `DC_VAULT_TOKEN` |
-| `dc-kubeconfig` | Secret file | Kubeconfig DC cluster `dc-dev` | `DC_KUBE_CONFIG_FILE` — kubectl deploy |
+| `dc-kubeconfig` | Secret file | Kubeconfig DC cluster `dc-dev` — **nguồn gốc từ Vault** `secret/k8s/dc-dev` | `DC_KUBE_CONFIG_FILE` — kubectl deploy |
 
 ### 1.3 Cấu hình hệ thống (đã đổi)
 
@@ -124,6 +124,15 @@ Xem thêm `docs/screenshots/README.md` + 28 ảnh trong `docs/screenshots/`.
 6. **Deploy rollout status treo/fail** → Dockerfile image phải chạy lâu (CMD sleep); image chỉ `echo` sẽ exit → pod Completed.
 7. **`ENABLED_STAGES` phải truyền rõ** (default `["CheckSource","GetVault"]` không chứa `company-get-vault`).
 8. Sau **restart Jenkins**, admin password có thể bị đổi → nếu web login fail, re-patch bcrypt hash `#jbcrypt:$2a$10$/Sxcnq2FO23BoKty7ydiieUbCe2/UTn0hVuez3GTHSzFhccXzDuWm` vào `/jenkins-home/users/admin_*/config.xml` + reload.
+
+## 5b. Kubeconfig — nguồn chuẩn là VAULT (không phải SSM)
+
+Đã chuyển kubeconfig sang **Vault** làm nguồn chuẩn:
+- Ansible (master role) push kubeconfig lên **Vault** `secret/k8s/<project>-<env>` (key `kubeconfig`) — sau khi kubeadm init.
+- Terraform `wait_k8s_api` đọc kubeconfig **từ Vault** (không còn phụ thuộc SSM).
+- Jenkins credential `dc-kubeconfig` được tạo/sync **từ Vault**.
+- Pipeline đọc qua `DC_KUBE_CONFIG_FILE=dc-kubeconfig` (`withCredentials`).
+- Vault token truyền qua `terraform.tfvars` (`vault_addr`, `vault_token` — new-project.sh ghi sẵn).
 
 ## 6. Trạng thái hiện tại của Jenkins (sau khi dọn Jenkinsfile cũ)
 

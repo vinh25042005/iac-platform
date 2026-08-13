@@ -67,7 +67,8 @@ spec:
 EOF
 ```
 
-Lấy kubeconfig của cluster → tạo **Jenkins credential loại "Secret file"** (id tuỳ chọn, VD `dc-kubeconfig`).
+Kubeconfig được **ansible tự push lên Vault** `secret/k8s/<project>-<env>` (nguồn chuẩn — không phải SSM).
+Tạo **Jenkins credential loại "Secret file"** (id `dc-kubeconfig`) từ Vault → pipeline đọc qua `DC_KUBE_CONFIG_FILE`.
 
 ## 3. Client Vault (DC) — chuẩn bị secret
 
