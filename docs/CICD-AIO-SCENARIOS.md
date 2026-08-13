@@ -1,5 +1,7 @@
 # CICD-AIO-Jenkins.groovy — Các kịch bản sử dụng & param cần điền / bỏ qua
 
+> **Muốn tự chạy lại từng bước (lệnh copy-paste đầy đủ + credential từng trường hợp) → xem [`docs/HUONG-DAN-CHAY-LAI.md`](./HUONG-DAN-CHAY-LAI.md).**
+
 > Nguyên tắc: `LOCATION`/`ENABLED_STAGES` bật khối **Company**; `CLIENT_LOCATION`/`CLIENT_ENV_ACTION`/`CLIENT_ENABLED_STAGES` bật khối **Client**.
 > Stage nào không cần thì **để param rỗng/default** → stage đó tự skip (không ảnh hưởng build).
 
