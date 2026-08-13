@@ -1,210 +1,115 @@
-# Hướng dẫn tự chạy lại pipeline `CICD-AIO-Jenkins.groovy` (từng bước)
+# Hướng dẫn chạy lại pipeline trên GIAO DIỆN Jenkins (từng kịch bản)
 
-> Tài liệu này ghi lại **chính xác các bước đã chạy thành công**, kèm từng param, credential
-> của từng trường hợp, để tự chạy lại và hiểu luồng.
-> File pipeline `CICD-AIO-Jenkins.groovy` **KHÔNG được sửa** — chỉ điền param khi trigger.
-
----
-
-## 0. Tổng quan kiến trúc
-
-```
-[GitLab] techshop-app (backend/frontend)
-    │  git clone
-    ▼
-[Jenkins all_in_one job]  ← Pipeline from SCM → CICD-AIO-Jenkins.groovy (GitHub iac-platform, main)
-    │  đọc secrets từ [Vault] secret/techshop (DOCKER_FILE, GRUNTFILE, ENV_FILE, CONFIG_ENV...)
-    │  build image → push [GitLab Registry] registry.gitlab.com/vinh25042005/...
-    │  (nếu client-deploy) đọc kubeconfig từ credential → kubectl deploy thẳng [Cluster K8s] (KHÔNG ArgoCD)
-    └── trigger [client-sink job] (nếu bật trigger-cd)
-```
-
-**Quy ước naming (pipeline tự đặt, dựa trên `PROJECT_NAME` + `ENVIRONMENT`):**
-
-| Thứ | Công thức | Ví dụ (`techshop` + `dev`) |
-|---|---|---|
-| Namespace | `<project>-<env>-ns` | `techshop-dev-ns` |
-| Deployment | `<project>-<env>-deployment` | `techshop-dev-deployment` |
-| Container | `<project>-<env>-container` | `techshop-dev-container` |
-| Đường dẫn secret file | `<project>-<env>/<key>` | `techshop-dev/sit.js` |
-
-> ⚠️ Pipeline chỉ **set image** (`kubectl set image deployment/... container=image`) nên
-> **deployment phải tồn tại sẵn** trong cluster trước khi chạy CD (xem mục 7).
+> Hướng dẫn này thao tác **100% bằng chuột trên giao diện Jenkins** — không cần dùng file, script hay lệnh.
+> Bạn chỉ cần: mở trình duyệt → đăng nhập Jenkins → điền form → bấm Build → đọc kết quả trên màn hình.
 
 ---
 
-## 1. Chuẩn bị môi trường (làm 1 lần)
+## 1. Mở & đăng nhập Jenkins
 
-### 1.1 Kết nối tới Jenkins qua SSH tunnel
+1. Mở trình duyệt (Chrome/Edge...).
+2. Vào địa chỉ: **`http://localhost:9090`**
+   (yêu cầu SSH tunnel tới máy Jenkins đang mở — nếu chưa, mở tunnel như lúc cài rồi vào lại).
+3. Trang **Sign in - Jenkins** hiện ra → nhập:
+   - **Username**: `admin`
+   - **Password**: mật khẩu admin đã đặt
+   - Bấm **Sign in**.
 
-Jenkins chạy docker trên EC2 `techshop-jenkins` (47.130.241.226), UI nằm sau tunnel:
-
-```bash
-# Mở 1 terminal riêng, giữ chạy nền:
-ssh -i ~/.ssh/techshop-key.pem -N -L 9090:localhost:9090 ubuntu@47.130.241.226
-```
-
-- UI: http://localhost:9090 → đăng nhập `admin` (pass xem mật khẩu đã cấu hình).
-- API/curl: dùng `-u admin:<JENKINS_TOKEN>` (token lấy từ `scripts/portal.env`).
-
-### 1.2 Nạp biến môi trường
-
-```bash
-cd /home/vinh2/iac-platform
-source scripts/portal.env    # JENKINS_USER, JENKINS_TOKEN, VAULT_TOKEN
-source scripts/cicd-test.env # GITLAB_TOKEN, VAULT_TOKEN, VAULT_ADDR, ...
-```
-
-> ⚠️ Cả 2 file này nằm trong `.gitignore` (không commit, không dán secret vào chat).
-
-### 1.3 Mẹo curl (rất quan trọng)
-
-URL Jenkins có ký tự `[ ]` → curl tưởng là "range" → lỗi `bad range in URL`.
-**Luôn thêm** `-g` (globoff) và `--noproxy '*'`:
-
-```bash
-curl -s -g --noproxy '*' -u "admin:$JENKINS_TOKEN" \
-  "http://127.0.0.1:9090/job/all_in_one/api/json?tree=nextBuildNumber" | jq
-```
+Sau khi đăng nhập, bạn ở trang **Dashboard** — danh sách các job.
 
 ---
 
-## 2. Credentials trong Jenkins (dùng cho param nào)
+## 2. Mở job `all_in_one`
 
-> **Điểm mấu chốt:** các param `GITLAB_ACCESS_TOKEN`, `REGISTRY_AUTH`, `*_VAULT_TOKEN`,
-> `DC_KUBE_CONFIG_FILE` **nhận CREDENTIAL ID** (tên credential), KHÔNG phải giá trị secret.
-> Pipeline tự `withCredentials` đọc ra.
-
-| Credential ID | Loại | Param nhận | Dùng trong kịch bản |
-|---|---|---|---|
-| `gitlab-token` | Secret text (GitLab PAT) | `GITLAB_ACCESS_TOKEN` | CI |
-| `gitlab-registry-auth` | Secret file (docker config registry.gitlab.com) | `REGISTRY_AUTH` | CI |
-| `vault-token` | Secret text (Vault token) | `COMPANY_VAULT_TOKEN` (CI) / `DC_VAULT_TOKEN` (CD) | CI + CD |
-| `dc-kubeconfig` | Secret file (kubeconfig cụm `dc-dev`) | `DC_KUBE_CONFIG_FILE` | CD lên cụm dc |
-| `demo-kubeconfig` | Secret file (kubeconfig cụm `demo-dev`) | `DC_KUBE_CONFIG_FILE` | CD lên cụm demo |
-| `jenkins-client-user` | Secret text (`admin`) | `JENKINS_CLIENT_USER` | trigger client-sink |
-| `jenkins-client-token` | Secret text (API token) | `JENKINS_CLIENT_TOKEN` | trigger client-sink |
-
-> Cách tạo credential file (kubeconfig): **Manage Jenkins → Credentials → System → Global →
-> Add Credentials → Kind = Secret file → Upload kubeconfig → ID = `demo-kubeconfig` → Create**.
-> (Xem mục 7.3 cách lấy kubeconfig từ Vault về máy.)
+1. Trên Dashboard, tìm job **`all_in_one`** → bấm vào tên.
+2. Trang job có:
+   - **Menu bên trái**: **Build with Parameters**, **Build History**, ...
+   - **Phần giữa**: mô tả job + build gần nhất.
 
 ---
 
-## 3. Các param chính (giải thích ngắn)
+## 3. Mở form điền tham số & chạy build
 
-| Param | Ý nghĩa | Ví dụ |
-|---|---|---|
-| `PROJECT_NAME` | Tên project → đặt tên ns/deployment/container | `techshop` |
-| `ENVIRONMENT` | Môi trường | `dev` / `sit` / `uat` / `prd` |
-| `LOCATION` | `company-side` = bật khối CI company | `company-side` |
-| `SOURCE_CODE_PATH` | Repo GitLab | `vinh25042005/techshop-app` |
-| `BRANCH_CODE` | Branch checkout/build | `main` |
-| `REGISTRY_URL` | Nơi push image | `registry.gitlab.com/vinh25042005` |
-| `VAULT_PATH` | Path Vault KV v2 | `secret/techshop` |
-| `ENABLED_STAGES` | Bật stage **company** (JSON array) | `["CheckSource","company-get-vault","build-push"]` |
-| `COMPANY_SECRET_VAULT` | Keys lấy từ Vault (company) | `["DOCKER_FILE","GRUNTFILE"]` |
-| `COMPANY_LOCATION_VAULT` | Tên file ghi ra tương ứng | `["Dockerfile","Gruntfile.js"]` |
-| `IMAGETAG` | Full image tag deploy (CD) | `registry.gitlab.com/.../techshop:dev-28` |
-| `CLIENT_LOCATION` | `client-side` = bật khối client | `client-side` |
-| `CLIENT_ENV_ACTION` | `client-deploy` hoặc `client-trigger` | `client-deploy` |
-| `CLIENT_ENABLED_STAGES` | Bật stage **client** | `["get-vault-dc","secret-dc","deploy-dc"]` |
-| `CLIENT_SECRET_VAULT` | Keys lấy từ Vault (client) | `["ENV_FILE","CONFIG_ENV"]` |
-| `CLIENT_SECRET_NAME` | Tên k8s secret tạo ra | `["env-file-secret","config-env-secret"]` |
-| `CLIENT_LOCATION_VAULT` | Tên file ghi ra (client) | `["sit.js","configEnv.js"]` |
-| `DC_KUBE_CONFIG_FILE` | Credential kubeconfig cụm | `demo-kubeconfig` |
-| `JENKINS_CLIENT_*` | Trigger CD client | `http://localhost:8080/job/client-sink`, `jenkins-client-user`, `jenkins-client-token` |
+1. Bấm **Build with Parameters** (menu bên trái).
+2. Trang form hiện ra với **rất nhiều ô** (PROJECT_NAME, ENVIRONMENT, ..., IMAGETAG, CLIENT_*, DC_*...).
+   **Chỉ điền các ô cần thiết** — các ô khác để nguyên mặc định / để trống; pipeline tự bỏ qua stage không bật.
+3. Điền xong → bấm nút **Build** (cuối form).
+
+Build mới hiện trên cùng cột **Build History** (menu trái trang job). Bấm vào số build (VD `#28`) để xem chi tiết.
 
 ---
 
-## 4. Cách trigger build (2 cách)
+## 4. Cách đọc kết quả trên giao diện
 
-**Cách 1 — UI:** Jenkins → job `all_in_one` → **Build with Parameters** → điền → **Build**.
+Trên trang của 1 build:
 
-**Cách 2 — API (dùng cho script):**
-```bash
-source scripts/portal.env
-curl -s -g --noproxy '*' -u "admin:$JENKINS_TOKEN" -X POST \
-  "http://127.0.0.1:9090/job/all_in_one/buildWithParameters" \
-  --data-urlencode 'PROJECT_NAME=techshop' \
-  --data-urlencode 'ENVIRONMENT=dev' \
-  ...  # mỗi param 1 --data-urlencode
-```
-
-> `buildWithParameters` trả HTTP `201` khi đã nhận. Build số = `nextBuildNumber` trước khi trigger.
+- **Stage View** (bảng ngang đầu trang): mỗi cột là 1 stage.
+  - 🟢 **Xanh** = thành công
+  - 🔴 **Đỏ** = lỗi (bấm vào cột đỏ để xem log lỗi)
+  - ⚪ **Xám** = bị bỏ qua (bình thường khi param không bật stage đó)
+  - 🟡 **Vàng / nhấp nháy** = đang chạy
+- **Console Output** (menu bên trái): log đầy đủ. Dòng cuối **`Finished: SUCCESS`** = thành công; **`Finished: FAILURE`** = lỗi.
+- Dùng **Ctrl+F** trong Console Output để tìm từ khoá (mỗi kịch bản nêu cụ thể bên dưới).
 
 ---
 
-## 5. Kịch bản A — Company CI (chỉ build + push image)
+## Kịch bản A — Company CI (chỉ build + push image)
 
-**Mục đích:** khách cần image trong registry, KHÔNG deploy.
+**Mục đích:** tạo image `techshop:dev-<số-build>` đẩy lên GitLab Registry. Không deploy.
+**Credential dùng (đã có sẵn, không cần tạo):** `gitlab-token`, `gitlab-registry-auth`, `vault-token`.
 
-**Credentials cần:** `gitlab-token`, `gitlab-registry-auth`, `vault-token`.
+**Bước 1 — Mở Build with Parameters, điền từng ô:**
 
-**Params (bỏ trống hết `CLIENT_*` / `DC_*`):**
-
-| Param | Giá trị |
+| Ô trên form | Giá trị cần điền |
 |---|---|
 | `PROJECT_NAME` | `techshop` |
 | `ENVIRONMENT` | `dev` |
 | `LOCATION` | `company-side` |
 | `SOURCE_CODE_PATH` | `vinh25042005/techshop-app` |
 | `BRANCH_CODE` | `main` |
-| `GITLAB_ACCESS_TOKEN` | `gitlab-token` ← credential ID |
+| `GITLAB_ACCESS_TOKEN` | `gitlab-token` ← **tên credential**, không phải token thật |
 | `REGISTRY_URL` | `registry.gitlab.com/vinh25042005` |
-| `REGISTRY_AUTH` | `gitlab-registry-auth` ← credential ID |
+| `REGISTRY_AUTH` | `gitlab-registry-auth` ← tên credential |
 | `COMPANY_VAULT_ADDR` | `https://52.221.18.86:8200` |
-| `COMPANY_VAULT_TOKEN` | `vault-token` ← credential ID |
+| `COMPANY_VAULT_TOKEN` | `vault-token` ← tên credential |
 | `VAULT_PATH` | `secret/techshop` |
 | `REPOSITORY_NAME` | `techshop-app` |
 | `ENABLED_STAGES` | `["CheckSource","company-get-vault","build-push"]` |
 | `COMPANY_SECRET_VAULT` | `["DOCKER_FILE","GRUNTFILE"]` |
 | `COMPANY_LOCATION_VAULT` | `["Dockerfile","Gruntfile.js"]` |
-| `TEAMS_WEBHOOK_URL` | (bỏ trống) |
+| `TEAMS_WEBHOOK_URL` | (để trống) |
+| Tất cả ô `CLIENT_*`, `DC_*`, `DR_*` | (để trống — không bật) |
 
-**Lệnh trigger đầy đủ:**
-```bash
-source scripts/portal.env
-curl -s -g --noproxy '*' -u "admin:$JENKINS_TOKEN" -X POST \
-  "http://127.0.0.1:9090/job/all_in_one/buildWithParameters" \
-  --data-urlencode 'PROJECT_NAME=techshop' --data-urlencode 'ENVIRONMENT=dev' \
-  --data-urlencode 'LOCATION=company-side' \
-  --data-urlencode 'SOURCE_CODE_PATH=vinh25042005/techshop-app' --data-urlencode 'BRANCH_CODE=main' \
-  --data-urlencode 'GITLAB_ACCESS_TOKEN=gitlab-token' \
-  --data-urlencode 'REGISTRY_URL=registry.gitlab.com/vinh25042005' --data-urlencode 'REGISTRY_AUTH=gitlab-registry-auth' \
-  --data-urlencode 'COMPANY_VAULT_ADDR=https://52.221.18.86:8200' --data-urlencode 'COMPANY_VAULT_TOKEN=vault-token' \
-  --data-urlencode 'VAULT_PATH=secret/techshop' --data-urlencode 'REPOSITORY_NAME=techshop-app' \
-  --data-urlencode 'ENABLED_STAGES=["CheckSource","company-get-vault","build-push"]' \
-  --data-urlencode 'COMPANY_SECRET_VAULT=["DOCKER_FILE","GRUNTFILE"]' \
-  --data-urlencode 'COMPANY_LOCATION_VAULT=["Dockerfile","Gruntfile.js"]' \
-  -o /dev/null -w 'HTTP %{http_code}\n'   # 201 = đã nhận
-```
+**Bước 2 — Bấm Build.**
 
-**Verify:** console có `naming to registry.gitlab.com/.../techshop:dev-<số-build> done`,
-`Build and push image success`, `Finished: SUCCESS`. Ảnh tham chiếu: `docs/screenshots/demo-ci-*`.
+**Bước 3 — Xem kết quả:**
+- Stage View: **Checkout Source code** → **Get secrets from Vault** → **Build and push image** đều 🟢 xanh.
+- Console Output (Ctrl+F `naming to`): `naming to registry.gitlab.com/vinh25042005/techshop-app/techshop:dev-<số-build> done`.
+- Cuối console: `Finished: SUCCESS`.
 
 ---
 
-## 6. Kịch bản B — Client CD (deploy image lên cluster K8s trần — KHÔNG ArgoCD)
+## Kịch bản B — Client CD (deploy image lên cluster — KHÔNG ArgoCD)
 
-**Mục đích:** deploy image ĐÃ CÓ sẵn lên cluster (không build). Đây là luồng mới
-(kubeconfig lấy từ **Vault**, deploy bằng `kubectl` trực tiếp, không ArgoCD).
+**Mục đích:** deploy image **đã có sẵn** (VD `dev-28`) thẳng lên cluster bằng kubectl — không qua ArgoCD.
+**Credential dùng (đã có sẵn):** `vault-token`, `demo-kubeconfig` (kubeconfig cluster demo; muốn deploy lên cluster khác thì dùng credential kubeconfig tương ứng).
 
-**Credentials cần:** `vault-token` (cho `DC_VAULT_TOKEN`), `demo-kubeconfig` hoặc `dc-kubeconfig`
-(cho `DC_KUBE_CONFIG_FILE`).
+> ⚠️ **Trước khi chạy lần đầu:** cluster đích phải có sẵn namespace `techshop-dev-ns` và deployment
+> `techshop-dev-deployment` (đúng quy ước `<project>-<env>-ns` / `<project>-<env>-deployment`)
+> vì pipeline chỉ **đổi image** (`kubectl set image`), không tạo deployment.
 
-**Params:**
+**Bước 1 — Mở Build with Parameters, điền từng ô:**
 
-| Param | Giá trị |
+| Ô trên form | Giá trị cần điền |
 |---|---|
-| `IMAGETAG` | `registry.gitlab.com/vinh25042005/techshop-app/techshop:dev-28` ← image đã build |
+| `IMAGETAG` | `registry.gitlab.com/vinh25042005/techshop-app/techshop:dev-28` ← image đã build ở kịch bản A |
 | `PROJECT_NAME` | `techshop` |
 | `ENVIRONMENT` | `dev` |
 | `LOCATION` | `company-side` |
 | `SOURCE_CODE_PATH` | `vinh25042005/techshop-app` |
 | `BRANCH_CODE` | `main` |
 | `GITLAB_ACCESS_TOKEN` | `gitlab-token` |
-| `VAULT_PATH` | `secret/techshop` ← **BẮT BUỘC** (thiếu → lỗi `vault kv get ... Not enough arguments`) |
+| `VAULT_PATH` | `secret/techshop` ← **bắt buộc** (thiếu sẽ lỗi) |
 | `ENABLED_STAGES` | `["CheckSource"]` ← chỉ checkout, không build |
 | `CLIENT_LOCATION` | `client-side` |
 | `CLIENT_ENV_ACTION` | `client-deploy` |
@@ -213,187 +118,95 @@ curl -s -g --noproxy '*' -u "admin:$JENKINS_TOKEN" -X POST \
 | `CLIENT_SECRET_NAME` | `["env-file-secret","config-env-secret"]` |
 | `CLIENT_LOCATION_VAULT` | `["sit.js","configEnv.js"]` |
 | `DC_VAULT_ADDR` | `https://52.221.18.86:8200` |
-| `DC_VAULT_TOKEN` | `vault-token` ← credential ID |
-| `DC_KUBE_CONFIG_FILE` | `demo-kubeconfig` ← credential ID cụm đích |
+| `DC_VAULT_TOKEN` | `vault-token` ← tên credential |
+| `DC_KUBE_CONFIG_FILE` | `demo-kubeconfig` ← tên credential kubeconfig |
+| Các ô `REGISTRY_*`, `COMPANY_*` còn lại, `DR_*` | (để trống) |
 
-**Lệnh trigger đầy đủ:**
-```bash
-source scripts/portal.env
-curl -s -g --noproxy '*' -u "admin:$JENKINS_TOKEN" -X POST \
-  "http://127.0.0.1:9090/job/all_in_one/buildWithParameters" \
-  --data-urlencode 'IMAGETAG=registry.gitlab.com/vinh25042005/techshop-app/techshop:dev-28' \
-  --data-urlencode 'PROJECT_NAME=techshop' --data-urlencode 'ENVIRONMENT=dev' \
-  --data-urlencode 'REPOSITORY_NAME=techshop-app' --data-urlencode 'LOCATION=company-side' \
-  --data-urlencode 'SOURCE_CODE_PATH=vinh25042005/techshop-app' --data-urlencode 'BRANCH_CODE=main' \
-  --data-urlencode 'GITLAB_ACCESS_TOKEN=gitlab-token' \
-  --data-urlencode 'VAULT_PATH=secret/techshop' \
-  --data-urlencode 'ENABLED_STAGES=["CheckSource"]' \
-  --data-urlencode 'CLIENT_LOCATION=client-side' --data-urlencode 'CLIENT_ENV_ACTION=client-deploy' \
-  --data-urlencode 'CLIENT_ENABLED_STAGES=["get-vault-dc","secret-dc","deploy-dc"]' \
-  --data-urlencode 'CLIENT_SECRET_VAULT=["ENV_FILE","CONFIG_ENV"]' \
-  --data-urlencode 'CLIENT_SECRET_NAME=["env-file-secret","config-env-secret"]' \
-  --data-urlencode 'CLIENT_LOCATION_VAULT=["sit.js","configEnv.js"]' \
-  --data-urlencode 'DC_VAULT_ADDR=https://52.221.18.86:8200' --data-urlencode 'DC_VAULT_TOKEN=vault-token' \
-  --data-urlencode 'DC_KUBE_CONFIG_FILE=demo-kubeconfig' \
-  -o /dev/null -w 'HTTP %{http_code}\n'
-```
+**Bước 2 — Bấm Build.**
 
-**Verify:** console có `secret/env-file-secret created`, `secret/config-env-secret created`,
-`deployment "techshop-dev-deployment" successfully rolled out`, `Finished: SUCCESS`.
-Ảnh tham chiếu: `docs/screenshots/demo-cd-*`.
+**Bước 3 — Xem kết quả** (Console Output, Ctrl+F):
+- `secret/env-file-secret created`
+- `secret/config-env-secret created`
+- `deployment "techshop-dev-deployment" successfully rolled out`
+- `Finished: SUCCESS`
 
 ---
 
-## 7. Chuẩn bị cluster & kubeconfig (làm trước khi chạy CD lần đầu)
+## Kịch bản C — CI + Trigger CD (build xong tự trigger job client)
 
-### 7.1 Tạo project mới (nếu chưa có)
+**Mục đích:** như kịch bản A, nhưng sau khi push image sẽ **tự trigger** job `client-sink` của client.
+**Credential dùng thêm:** `jenkins-client-user`, `jenkins-client-token`.
 
-```bash
-cd /home/vinh2/iac-platform
-ENVS=dev KEY_NAME=techshop-key INSTANCE_TYPE=t3.medium NODE_COUNT=3 \
-ENABLE_ARGOCD=false \
-VAULT_ADDR=https://52.221.18.86:8200 VAULT_TOKEN=<VAULT_TOKEN từ cicd-test.env> \
-./scripts/new-project.sh demo
-```
-- `ENABLE_ARGOCD=false` → cluster K8s trần (không tạo ArgoCD app).
-- Script tự ghi `vault_addr` / `vault_token` / `enable_argocd` vào `terraform.tfvars`.
+**Bước 1 — Mở Build with Parameters:** điền **giống hệt Kịch bản A**, chỉ khác 4 ô:
 
-### 7.2 Terraform apply (tạo cụm + Ansible push kubeconfig lên Vault)
+| Ô trên form | Giá trị cần điền |
+|---|---|
+| `ENABLED_STAGES` | `["CheckSource","company-get-vault","build-push","trigger-cd"]` |
+| `JENKINS_CLIENT_URL` | `http://localhost:8080/job/client-sink` |
+| `JENKINS_CLIENT_USER` | `jenkins-client-user` ← tên credential |
+| `JENKINS_CLIENT_TOKEN` | `jenkins-client-token` ← tên credential |
 
-```bash
-cd terraform/environments/demo/dev
-terraform init -input=false
-terraform validate
-terraform apply -auto-approve -input=false   # ~15-20 phút
-```
-- Ansible (master role) sau khi `kubeadm init` **tự push kubeconfig lên Vault** `secret/k8s/demo-dev`.
+**Bước 2 — Bấm Build.**
 
-### 7.3 Lấy kubeconfig từ Vault & verify cụm
-
-```bash
-source scripts/cicd-test.env
-curl -sk -H "X-Vault-Token: $VAULT_TOKEN" \
-  "$VAULT_ADDR/v1/secret/data/k8s/demo-dev" | jq -r '.data.data.kubeconfig' > /tmp/demo-kubeconfig
-chmod 600 /tmp/demo-kubeconfig
-kubectl --kubeconfig /tmp/demo-kubeconfig get nodes   # mong đợi 3 Ready
-kubectl --kubeconfig /tmp/demo-kubeconfig get ns | grep -i argocd   # KHÔNG có → đúng yêu cầu
-```
-
-### 7.4 Tạo credential `demo-kubeconfig` trong Jenkins
-
-Tải file `/tmp/demo-kubeconfig` lên làm **Secret file** credential ID `demo-kubeconfig`
-(Manage Jenkins → Credentials → System → Global → Add Credentials → Secret file → Create).
-
-### 7.5 Tạo deployment TRƯỚC (pipeline chỉ `kubectl set image`)
-
-```bash
-cat > /tmp/app.yaml <<'YAML'
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: techshop-dev-ns
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: gitlab-regcred
-  namespace: techshop-dev-ns
-type: kubernetes.io/dockerconfigjson
-data:
-  .dockerconfigjson: <base64 của docker config registry.gitlab.com>
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: techshop-dev-deployment
-  namespace: techshop-dev-ns
-spec:
-  replicas: 1
-  selector:
-    matchLabels: { app: techshop-dev-deployment }
-  template:
-    metadata:
-      labels: { app: techshop-dev-deployment }
-    spec:
-      imagePullSecrets: [{ name: gitlab-regcred }]
-      containers:
-        - name: techshop-dev-container
-          image: registry.gitlab.com/vinh25042005/techshop-app/techshop:dev-28
-          imagePullPolicy: IfNotPresent
-          ports: [{ containerPort: 3000 }]
-YAML
-kubectl --kubeconfig /tmp/demo-kubeconfig apply -f /tmp/app.yaml
-```
-> ⚠️ Tên ns/deployment/container phải **đúng quy ước** theo `PROJECT_NAME`+`ENVIRONMENT`
-> (mục 0). Sai namespace → CD fail vì `namespace not found`.
-
-### 7.6 Xoá project (khi không dùng nữa)
-
-```bash
-cd terraform/environments/demo/dev && terraform destroy -auto-approve
-# + xoá Vault secret/k8s/demo-dev nếu muốn dọn sạch
-```
+**Bước 3 — Xem kết quả:**
+- Console: `Trigger CD client success`.
+- Vào Dashboard → job `client-sink` → **Build History** thấy build mới = đã trigger thành công.
 
 ---
 
-## 8. Kịch bản C — CI + TRIGGER CD (build xong tự trigger job client)
+## Kịch bản D — UAT/PROD + hộp chọn (Select Execution Mode)
 
-**Params:** giống Kịch bản A nhưng `ENABLED_STAGES` thêm `"trigger-cd"` + 3 param client-sink:
+**Mục đích:** mô phỏng deploy môi trường uat/prod — build sẽ **dừng lại giữa chừng chờ bạn chọn**.
 
-```bash
---data-urlencode 'ENABLED_STAGES=["CheckSource","company-get-vault","build-push","trigger-cd"]' \
---data-urlencode 'JENKINS_CLIENT_URL=http://localhost:8080/job/client-sink' \
---data-urlencode 'JENKINS_CLIENT_USER=jenkins-client-user' \
---data-urlencode 'JENKINS_CLIENT_TOKEN=jenkins-client-token'
-```
+**Bước 1 — Mở Build with Parameters:** điền giống **Kịch bản A**, nhưng:
+- **`ENVIRONMENT`** = `uat` (hoặc `prd`)
+- `ENABLED_STAGES` = `["CheckSource","company-get-vault","build-push"]`
 
-**Verify:** console `Trigger CD client success`; job `client-sink` xuất hiện build mới.
+**Bước 2 — Bấm Build.** Build chạy tới stage **Select Execution Mode** rồi dừng (trạng thái "Paused for Input").
 
----
+**Bước 3 — Thao tác khi build dừng (quan trọng):**
+1. Mở build đang chạy → giữa trang hiện hộp vàng **Input requested**.
+2. Bấm **Proceed** → hiện lựa chọn → chọn **`FULL_CICD`** → bấm **Proceed**.
+3. Hộp **thứ 2** hỏi **Branch Code** → gõ `main` → bấm **Proceed**.
+4. Build tiếp tục chạy: Checkout → Get secrets → Build and push (tag `uat-<số-build>`).
 
-## 9. Kịch bản D — UAT/PROD + Select Execution Mode (input)
+**Bước 4 — Xem kết quả:** Console có `FULL_CICD: Đã xác nhận, sẽ build từ branch: main`,
+rồi `naming to .../techshop:uat-<số-build> done`, và `Finished: SUCCESS`.
 
-**Params:** giống Kịch bản A nhưng `ENVIRONMENT=uat` (hoặc `prd`).
-
-**Khi chạy**, stage **Select Execution Mode** dừng lại chờ input:
-1. Build page → **Proceed** → chọn **FULL_CICD** → **Proceed**.
-2. Input thứ 2 → nhập branch `main` → **Proceed**.
-
-> Có thể submit tự động bằng `/tmp/submit_input.py <build> FULL_CICD main`.
-
-**Verify:** console `FULL_CICD: Đã xác nhận, sẽ build từ branch: main` →
-push `techshop:uat-<số-build>` → SUCCESS. Ảnh: `docs/screenshots/4-uat-*`.
+> Không bấm gì → build chờ mãi. Muốn dừng → bấm **Abort**.
 
 ---
 
-## 10. Bảng tham chiếu nhanh "dùng kịch bản nào"
+## 5. Tạo credential mới bằng giao diện (chỉ khi cần, VD thêm cluster mới)
 
-| Nhu cầu khách | Kịch bản | `ENABLED_STAGES` (company) | `CLIENT_ENABLED_STAGES` | Credential thêm |
+Khi deploy lên cluster mới, cần credential kubeconfig mới:
+
+1. Dashboard → **Manage Jenkins** → **Credentials** → **System** → **Global credentials (unrestricted)**.
+2. Bấm **Add Credentials**.
+3. **Kind** = **Secret file**.
+4. **File** = bấm **Choose file** → chọn file kubeconfig của cluster đó.
+5. **ID** = đặt tên, VD `demo-kubeconfig`.
+6. Bấm **Create**.
+7. Khi chạy Kịch bản B, ô **`DC_KUBE_CONFIG_FILE`** điền đúng **ID** vừa tạo.
+
+---
+
+## 6. Bảng tóm tắt nhanh (nhu cầu → điền gì)
+
+| Nhu cầu | Kịch bản | `ENABLED_STAGES` | `CLIENT_ENABLED_STAGES` | Credential |
 |---|---|---|---|---|
-| Chỉ lấy image | A — CI | `["CheckSource","company-get-vault","build-push"]` | (bỏ) | — |
-| Deploy image có sẵn lên K8s trần | B — CD | `["CheckSource"]` | `["get-vault-dc","secret-dc","deploy-dc"]` | `demo-kubeconfig`/`dc-kubeconfig` |
-| Build xong tự trigger client | C — CI+trigger | `[...,"trigger-cd"]` | (bỏ) | `jenkins-client-user/token` |
-| UAT/PROD có input chọn mode | D — UAT | `["CheckSource","company-get-vault","build-push"]` (ENV=uat) | (bỏ) | — |
+| Chỉ lấy image | A | `["CheckSource","company-get-vault","build-push"]` | (trống) | gitlab-token, gitlab-registry-auth, vault-token |
+| Deploy image có sẵn | B | `["CheckSource"]` | `["get-vault-dc","secret-dc","deploy-dc"]` | vault-token, demo-kubeconfig |
+| Build + trigger client | C | thêm `"trigger-cd"` | (trống) | + jenkins-client-user/token |
+| UAT/PROD có hộp chọn | D | như A (ENV=uat/prd) | (trống) | như A |
 
 ---
 
-## 11. Lỗi thường gặp & cách xử lý
+## 7. Mẹo & lưu ý
 
-| Triệu chứng | Nguyên nhân | Cách fix |
-|---|---|---|
-| `vault kv get -field=ENV_FILE ... Not enough arguments` | Thiếu `VAULT_PATH` | Truyền `VAULT_PATH=secret/techshop` |
-| `kubectl ... namespace not found` | Deployment/ns chưa tạo hoặc sai tên | Tạo sẵn theo đúng quy ước naming (mục 7.5) |
-| curl `bad range in URL` | `[ ]` trong URL | Thêm `-g` (globoff) |
-| curl không trả lời / HTTP 000 | Proxy env hoặc tunnel chết | `--noproxy '*'`; kiểm tra lại tunnel 9090 |
-| `Build Aborted by user at selection step` | Submit input sai (crumb) | Submit qua UI Proceed, hoặc dùng `/tmp/submit_input.py` |
-| Deploy rollout treo/fail | Image không chạy lâu | Dockerfile trong Vault phải `CMD sleep 3600` |
-| Sau restart Jenkins, login fail | Admin password bị reset | Re-patch bcrypt hash (xem `docs/JENKINS-CICD-AIO-REPORT.md` mục 5.8) |
-
----
-
-## 12. File tham chiếu
-
-- `docs/CICD-AIO-SCENARIOS.md` — mô tả 7 kịch bản + bảng param điền/bỏ.
-- `docs/JENKINS-CICD-AIO-REPORT.md` — plugins/credentials cài đặt, kết quả test, lưu ý.
-- `docs/screenshots/` — ảnh từng kịch bản (gồm `demo-ci-*`, `demo-cd-*`).
-- `CICD-AIO-Jenkins.groovy` — pipeline gốc (KHÔNG sửa).
+- Đọc kết quả nhanh nhất bằng **màu Stage View**: xanh = OK, đỏ = lỗi, xám = bỏ qua, vàng = đang chạy.
+- Dùng **Console Output + Ctrl+F** để tìm dòng chứng minh: `naming to ... done`, `secret/... created`, `successfully rolled out`, `Finished: SUCCESS`.
+- Các ô dạng danh sách (`ENABLED_STAGES`, `CLIENT_ENABLED_STAGES`, `*_SECRET_VAULT`, `*_LOCATION_VAULT`, `*_SECRET_NAME`) nhập **dạng JSON** có ngoặc vuông: `["a","b"]`.
+- Các ô nhận **tên credential** (VD `gitlab-token`) chứ không phải giá trị secret — Jenkins tự tra credential khi chạy.
+- Quy ước tên pipeline tự đặt: namespace `<project>-<env>-ns`, deployment `<project>-<env>-deployment`, container `<project>-<env>-container`.
+- **Không sửa file pipeline `CICD-AIO-Jenkins.groovy`** — mọi việc chỉ là điền form trên giao diện.
