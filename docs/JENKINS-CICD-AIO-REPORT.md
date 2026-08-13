@@ -1,9 +1,13 @@
 # Report — Cài đặt Jenkins để chạy `CICD-AIO-Jenkins.groovy`
 
 > Jenkins: `techshop-jenkins` (EC2 47.130.241.226, Docker `jenkins/jenkins:lts-jdk21`, home `/jenkins-home`)
-> Version Jenkins: **2.568.1** | Job: **`all_in_one`** (Pipeline from SCM → GitHub `iac-platform`/`CICD-AIO-Jenkins.groovy`, branch `main`)
-> Admin: `admin` / `Admin@123456` (đã reset; API token cũ vẫn dùng được)
+> Version Jenkins: **2.568.1** | Job duy nhất: **`all_in_one`** (Pipeline from SCM → GitHub `iac-platform`/`CICD-AIO-Jenkins.groovy`, branch `main`)
+> Admin: `admin` / `Admin@123456`
 > Thời điểm: 2026-08-13
+
+> 🧹 **Đã dọn sạch Jenkinsfile cũ** (root `Jenkinsfile` đã xoá): đã xoá 3 job cũ `123-ci`, `techshop-ci`, `test123-ci`
+> và 3 credential cũ `vault-approle-jenkins`, `github-token`, `github-token-secret`.
+> Jenkins giờ chỉ phục vụ **một** pipeline mới: `CICD-AIO-Jenkins.groovy`.
 
 ---
 
@@ -19,9 +23,11 @@
 | **pipeline-utility-steps** | 2.13.0 | Pipeline gọi DSL **`readJSON`/`writeJSON`** trong `applySecrets()` (client-side Apply Secrets) + nhiều hàm client | ⚠️ Thiếu → build client-side fail: `NoSuchMethodError: readJSON`. Cần dep `snakeyaml-api` (đã có sẵn). |
 | snakeyaml-api / snakeyaml-engine-api | 2.5-149 / 3.0.1 | Dependency của pipeline-utility-steps | Có sẵn / tự cài. |
 
-**Plugin đã có sẵn (không cần thêm) mà pipeline dùng:** `workflow-cps`, `workflow-job`, `workflow-aggregator`, `git`, `credentials`, `credentials-binding`, `plain-credentials`, `ssh-credentials`, `junit`, `timestamper`, `structs`, `hashicorp-vault-plugin`/`pipeline` (dùng cho Jenkinsfile cũ — CICD-AIO dùng `vault` CLI, không dùng plugin Vault), `generic-webhook-trigger`/`github*` (cho Jenkinsfile cũ).
+**Plugin đã có sẵn mà pipeline dùng:** `workflow-cps`, `workflow-job`, `workflow-aggregator`, `git`, `credentials`, `credentials-binding`, `plain-credentials`, `ssh-credentials`, `junit`, `timestamper`, `structs`.
 
-### 1.2 Credentials (đã tạo — ID dùng trong params pipeline)
+*(Các plugin của Jenkinsfile cũ như `hashicorp-vault-plugin`/`pipeline`, `generic-webhook-trigger`, `github*` vẫn còn cài nhưng **không dùng** cho CICD-AIO — pipeline này dùng `vault` CLI và clone qua credential GitLab.)*
+
+### 1.2 Credentials (chỉ còn 4 — đều cần cho CICD-AIO)
 
 | Credential ID | Loại | Nội dung | Param pipeline dùng |
 |---------------|------|----------|---------------------|
@@ -29,8 +35,6 @@
 | `gitlab-registry-auth` | Secret file | `~/.docker/config.json` cho `registry.gitlab.com` | `REGISTRY_AUTH` — docker login/push |
 | `vault-token` | Secret text | Vault token (company Vault 52.221.18.86) | `COMPANY_VAULT_TOKEN`, `DC_VAULT_TOKEN` |
 | `dc-kubeconfig` | Secret file | Kubeconfig DC cluster `dc-dev` | `DC_KUBE_CONFIG_FILE` — kubectl deploy |
-| (cũ) `vault-approle-jenkins` | AppRole | Dùng cho Jenkinsfile cũ | — |
-| (cũ) `github-token`, `github-token-secret` | — | Dùng cho Jenkinsfile cũ | — |
 
 ### 1.3 Cấu hình hệ thống (đã đổi)
 
@@ -120,3 +124,11 @@ Xem thêm `docs/screenshots/README.md` + 28 ảnh trong `docs/screenshots/`.
 6. **Deploy rollout status treo/fail** → Dockerfile image phải chạy lâu (CMD sleep); image chỉ `echo` sẽ exit → pod Completed.
 7. **`ENABLED_STAGES` phải truyền rõ** (default `["CheckSource","GetVault"]` không chứa `company-get-vault`).
 8. Sau **restart Jenkins**, admin password có thể bị đổi → nếu web login fail, re-patch bcrypt hash `#jbcrypt:$2a$10$/Sxcnq2FO23BoKty7ydiieUbCe2/UTn0hVuez3GTHSzFhccXzDuWm` vào `/jenkins-home/users/admin_*/config.xml` + reload.
+
+## 6. Trạng thái hiện tại của Jenkins (sau khi dọn Jenkinsfile cũ)
+
+- **Job duy nhất:** `all_in_one` → Pipeline from SCM → `CICD-AIO-Jenkins.groovy` (GitHub `iac-platform`, branch `main`)
+- **Credentials:** chỉ còn 4 (`gitlab-token`, `gitlab-registry-auth`, `vault-token`, `dc-kubeconfig`)
+- **Đã xoá:** 3 job cũ (`123-ci`, `techshop-ci`, `test123-ci`) + 3 credential cũ (`vault-approle-jenkins`, `github-token`, `github-token-secret`)
+- **Jenkinsfile cũ** (root) đã xoá khỏi repo
+- Plugin cũ (`hashicorp-vault`, `generic-webhook-trigger`, `github*`) vẫn cài nhưng không dùng cho pipeline mới
