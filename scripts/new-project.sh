@@ -29,6 +29,9 @@ NODE_COUNT="${NODE_COUNT:-3}"
 MASTER_NODE_INDEX="${MASTER_NODE_INDEX:-0}"
 # Rancher standalone (chọn service "rancher" trên UI) — true/false.
 ENABLE_RANCHER="${ENABLE_RANCHER:-false}"
+# ArgoCD — true: cài ArgoCD + tạo Application (mặc định).
+#       false: cluster K8s trần, deploy trực tiếp kubectl/helm (dùng cho CICD-AIO deploy).
+ENABLE_ARGOCD="${ENABLE_ARGOCD:-true}"
 # Loại máy EC2 — Backstage truyền qua env (chọn trên UI: t3.small/t3.medium/t3.large...)
 INSTANCE_TYPE="${INSTANCE_TYPE:-t3.small}"
 # Docker registry — Backstage truyền qua env REGISTRY_BASE (VD: docker.io/vinh2504).
@@ -61,6 +64,9 @@ master_node_index = $MASTER_NODE_INDEX  # ← node nào làm master (0 = node đ
 
 # ── Rancher standalone (chọn service "rancher" trên Backstage) ──
 enable_rancher = $ENABLE_RANCHER   # true → EC2 riêng chạy Rancher (ngoài cụm K8s)
+
+# ── ArgoCD ──
+enable_argocd = $ENABLE_ARGOCD     # false → cluster K8s trần (deploy kubectl/helm, không ArgoCD)
 EOF
   echo "  ✅ $dst"
 done
@@ -86,9 +92,10 @@ else
 fi
 
 echo ">>> [3/4] ArgoCD apps..."
-mkdir -p "$ROOT/argocd/apps"
-for env in $ENVS; do
-  cat > "$ROOT/argocd/apps/$PROJECT-$env.yaml" <<EOF
+if [ "$ENABLE_ARGOCD" = "true" ]; then
+  mkdir -p "$ROOT/argocd/apps"
+  for env in $ENVS; do
+    cat > "$ROOT/argocd/apps/$PROJECT-$env.yaml" <<EOF
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -113,8 +120,11 @@ spec:
     syncOptions:
       - CreateNamespace=true
 EOF
-done
-echo "  ✅ argocd/apps/$PROJECT-*.yaml"
+  done
+  echo "  ✅ argocd/apps/$PROJECT-*.yaml"
+else
+  echo "  ⏭️ Bỏ qua ArgoCD apps (ENABLE_ARGOCD=false — cluster K8s trần, deploy kubectl/helm trực tiếp)"
+fi
 
 echo ">>> [4/4] Đăng ký project..."
 grep -q "^$PROJECT " "$ROOT/projects.txt" 2>/dev/null || echo "$PROJECT" >> "$ROOT/projects.txt"

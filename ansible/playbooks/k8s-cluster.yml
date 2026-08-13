@@ -29,10 +29,14 @@
   roles:
     - worker
 
-# ─── Post-deploy: cert-manager + ArgoCD + ClusterIssuer ───
+# ─── Post-deploy: cert-manager + ArgoCD (tùy chọn) + ClusterIssuer ───
 - name: Post-deploy tasks
   hosts: master
   become: yes
+  vars:
+    # Mặc định cài ArgoCD. Truyền -e install_argocd=false (từ terraform enable_argocd=false)
+    # để tạo cluster K8s trần (deploy trực tiếp bằng kubectl/helm, không dùng ArgoCD).
+    install_argocd: true
   tasks:
     - name: Install cert-manager (CRDs + manifest + fix RBAC + CA)
       shell: |
@@ -65,6 +69,7 @@
       changed_when: false
 
     - name: Install ArgoCD (server-side để tránh lỗi CRD >262KB)
+      when: install_argocd | default(true) | bool
       shell: |
         # IDEMPOTENT: nếu argocd-server đã available (đã cài từ lần trước) thì
         # KHÔNG re-apply lại toàn bộ manifest nặng (tránh treo server-side apply
@@ -79,6 +84,11 @@
         kubectl wait --for=condition=available --timeout=3m \
           -n argocd deployment/argocd-server
       changed_when: false
+
+    - name: Announce ArgoCD skipped (k8s-direct mode)
+      when: not (install_argocd | default(true) | bool)
+      debug:
+        msg: ">>> enable_argocd=false → bỏ qua ArgoCD (cluster K8s trần, deploy bằng kubectl/helm)"
 
     - name: Create self-signed ClusterIssuer (cho Ingress TLS, tránh ArgoCD health check issue)
       shell: |
@@ -95,4 +105,4 @@
 
     - name: Announce cluster ready
       debug:
-        msg: ">>> Cluster {{ project }}-{{ env }} READY! (node = kubeadm, ArgoCD installed)"
+        msg: ">>> Cluster {{ project }}-{{ env }} READY! (node = kubeadm, ArgoCD = {{ install_argocd | default(true) }})"
