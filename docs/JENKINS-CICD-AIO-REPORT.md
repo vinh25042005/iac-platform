@@ -111,6 +111,7 @@
 | 13 | Client CD (sau fix) | GetVault(client) → **Apply Secrets** → **Deploy to Cluster** (`kubectl set image` → `dev-11`) | ✅ SUCCESS |
 | 28 | Company CI (cluster **demo**) | Checkout → GetVault(company) → Build&Push (`dev-28`) | ✅ SUCCESS |
 | 31 | Client CD (cluster **demo**, **không ArgoCD**) | GetVault(client) → **Apply Secrets** (`env-file-secret`, `config-env-secret`) → **Deploy to Cluster** (`kubectl set image` → `dev-28`, rollout OK) | ✅ SUCCESS |
+| 32 | Client CD lên **cụm DR** (`dr-dev` — 2 node t3.small) | GetVault(client **DR**) → **Apply Secrets** → **Deploy to Cluster** (`kubectl set image` → `dev-28`, rollout OK) | ✅ SUCCESS |
 
 > **Test cluster `demo`**: tạo mới bằng `new-project.sh demo` với `ENABLE_ARGOCD=false` → cluster K8s trần. Kubeconfig tự động được Ansible push lên **Vault** `secret/k8s/demo-dev`, Jenkins credential `demo-kubeconfig` sync từ Vault, pipeline deploy trực tiếp bằng `kubectl` (không qua ArgoCD). Ảnh: `docs/screenshots/demo-ci-*` + `demo-cd-*`.
 

@@ -177,6 +177,45 @@ rồi `naming to .../techshop:uat-<số-build> done`, và `Finished: SUCCESS`.
 
 ---
 
+## Kịch bản E — Deploy lên cụm DR (Disaster Recovery)
+
+**Mục đích:** deploy image lên **cụm dự phòng (DR)** — cụm K8s thứ 2 tách biệt. Đã test thật trên cụm `dr-dev` (small: 2 node t3.small) → build #32 ✅.
+
+> ⚠️ Pipeline xử lý **1 cụm 1 build**: muốn deploy lên DR thì dùng đúng stage `*-dr` (KHÔNG trộn `*-dc`), và điền bộ param `DR_*` (không phải `DC_*`).
+> Cụm DR cũng phải có sẵn namespace + deployment đúng tên (giống Kịch bản B).
+
+**Bước 1 — Mở Build with Parameters, điền từng ô:**
+
+| Ô trên form | Giá trị cần điền |
+|---|---|
+| `IMAGETAG` | `registry.gitlab.com/vinh25042005/techshop-app/techshop:dev-28` (image đã build) |
+| `PROJECT_NAME` | `techshop` |
+| `ENVIRONMENT` | `dev` |
+| `LOCATION` | `company-side` |
+| `SOURCE_CODE_PATH` | `vinh25042005/techshop-app` |
+| `BRANCH_CODE` | `main` |
+| `GITLAB_ACCESS_TOKEN` | `gitlab-token` |
+| `VAULT_PATH` | `secret/techshop` |
+| `ENABLED_STAGES` | `["CheckSource"]` |
+| `CLIENT_LOCATION` | `client-side` |
+| `CLIENT_ENV_ACTION` | `client-deploy` |
+| `CLIENT_ENABLED_STAGES` | `["get-vault-dr","secret-dr","deploy-dr"]` ← dùng **`*-dr`** |
+| `CLIENT_SECRET_VAULT` | `["ENV_FILE","CONFIG_ENV"]` |
+| `CLIENT_SECRET_NAME` | `["env-file-secret","config-env-secret"]` |
+| `CLIENT_LOCATION_VAULT` | `["sit.js","configEnv.js"]` |
+| `DR_VAULT_ADDR` | `https://52.221.18.86:8200` |
+| `DR_VAULT_TOKEN` | `vault-token` (tên credential) |
+| `DR_KUBE_CONFIG_FILE` | `dr-kubeconfig` (tên credential kubeconfig cụm DR) |
+| Các ô `DC_*`, `REGISTRY_*`, `COMPANY_*` | (để trống) |
+
+**Bước 2 — Bấm Build.**
+
+**Bước 3 — Xem kết quả** (Console Output, Ctrl+F): `secret/env-file-secret created`, `secret/config-env-secret created`, `deployment "techshop-dev-deployment" successfully rolled out`, `Finished: SUCCESS`.
+
+> Để deploy **đồng thời DC + DR** (mô hình standby), chạy 2 build riêng: 1 build `*-dc` (kịch bản B) + 1 build `*-dr` (kịch bản E).
+
+---
+
 ## 5. Tạo credential mới bằng giao diện (chỉ khi cần, VD thêm cluster mới)
 
 Khi deploy lên cluster mới, cần credential kubeconfig mới:
@@ -199,6 +238,7 @@ Khi deploy lên cluster mới, cần credential kubeconfig mới:
 | Deploy image có sẵn | B | `["CheckSource"]` | `["get-vault-dc","secret-dc","deploy-dc"]` | vault-token, demo-kubeconfig |
 | Build + trigger client | C | thêm `"trigger-cd"` | (trống) | + jenkins-client-user/token |
 | UAT/PROD có hộp chọn | D | như A (ENV=uat/prd) | (trống) | như A |
+| Deploy lên cụm DR | E | `["CheckSource"]` | `["get-vault-dr","secret-dr","deploy-dr"]` | vault-token, dr-kubeconfig |
 
 ---
 
