@@ -306,6 +306,42 @@ triggers {
 
 ---
 
+## Cheat sheet DEMO — bị bắt làm kịch bản bất kỳ thì làm sao
+
+> Cách dùng: nghe yêu cầu → tra bảng dưới → chỉ cần đổi ĐÚNG ô khác biệt so với Kịch bản A (gốc CI).
+
+### Bước 1 — Xác định kịch bản theo câu hỏi
+
+| Nếu họ yêu cầu / nói | Kịch bản | Đổi gì so với A (gốc CI) |
+|---|---|---|
+| "Khách chỉ cần image" | **A — CI** | (không đổi — làm luôn) |
+| "Khách đã có image, deploy lên DC" | **B — CD** | `ENABLED_STAGES=["CheckSource"]` + bật khối CLIENT (`client-deploy`, `*-dc`) |
+| "Build xong tự trigger CD client" | **C — CI + trigger** | `ENABLED_STAGES` thêm `"trigger-cd"` + 3 ô `JENKINS_CLIENT_*` |
+| "Môi trường UAT/PROD" | **D — UAT** | `ENVIRONMENT=uat`/`prd` + lúc chạy bấm Proceed → chọn FULL_CICD → gõ branch |
+| "Deploy lên cụm dự phòng DR" | **E — DR** | Khối CLIENT dùng `*-dr` + bộ param `DR_*` |
+| "Chạy đủ Unit Test + Configure + Replace Vault + Work Flow" | **F–I — CD đầy đủ** | `CLIENT_ENABLED_STAGES` thêm `unit-test-dc, configure-dc, replace-vault-pipeline, workflow-process-pipeline` |
+
+### Bước 2 — Ô quan trọng nhất phải đúng
+
+| Kịch bản | Ô "định mệnh" | Ô bắt buộc kèm theo |
+|---|---|---|
+| **A** | `LOCATION=company-side` | `ENABLED_STAGES=["CheckSource","company-get-vault","build-push"]` + `VAULT_PATH=secret/techshop` + các credential `gitlab-token`,`gitlab-registry-auth`,`vault-token` |
+| **B** | `CLIENT_LOCATION=client-side` + `CLIENT_ENV_ACTION=client-deploy` | `IMAGETAG=...dev-XX` + `CLIENT_ENABLED_STAGES=["get-vault-dc","secret-dc","deploy-dc"]` + `DC_KUBE_CONFIG_FILE=demo-kubeconfig` |
+| **C** | thêm `"trigger-cd"` vào `ENABLED_STAGES` | `JENKINS_CLIENT_URL=http://localhost:8080/job/client-sink` + `jenkins-client-user`/`jenkins-client-token` |
+| **D** | `ENVIRONMENT=uat`/`prd` | Khi build dừng: **Proceed → FULL_CICD → Proceed → gõ `main` → Proceed** |
+| **E** | dùng `*-dr` thay `*-dc` | `DR_VAULT_ADDR/TOKEN` + `DR_KUBE_CONFIG_FILE=dr-kubeconfig` (KHÔNG điền `DC_*`) |
+| **F–I** | thêm các stage `unit-test-dc, configure-dc, replace-vault-pipeline, workflow-process-pipeline` | ⚠️ Unit Test sẽ FAIL ở bước gửi log webhook nếu `TEAMS_WEBHOOK_URL` rỗng (đã biết) — nói trước để khỏi bỡ ngỡ |
+
+### Bước 3 — Chứng minh thành công (Ctrl+F trong Console)
+
+- **A/C/D**: `naming to registry.gitlab.com/.../techshop:dev-XX done` + `Build and push image success` + `Finished: SUCCESS`
+- **B/E**: `secret/env-file-secret created` + `secret/config-env-secret created` + `deployment "techshop-dev-deployment" successfully rolled out`
+- **C**: `Trigger CD client success` + job `client-sink` có build mới
+
+> Mẹo nhớ nhanh: **A** chỉ build → **B** tự deploy (DC) → **C** build xong bắn client → **D** UAT có hộp chọn → **E** deploy DR → **F–I** chạy "chiêu trò" nâng cao. Cứ giữ `VAULT_PATH=secret/techshop` + `BRANCH_CODE=main` + `SOURCE_CODE_PATH=vinh25042005/techshop-app` cho mọi kịch bản là đỡ lệch.
+
+---
+
 ## 7. Mẹo & lưu ý
 
 - Đọc kết quả nhanh nhất bằng **màu Stage View**: xanh = OK, đỏ = lỗi, xám = bỏ qua, vàng = đang chạy.
