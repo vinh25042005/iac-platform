@@ -248,13 +248,18 @@ Khi deploy lên cluster mới, cần credential kubeconfig mới:
 
 ```
 Dev push (branch dev) → GitLab webhook → HTTPS nginx proxy (8443) → job gitlab-webhook-ci
-  → lọc branch dev → tự trigger all_in_one (ENV=dev, BRANCH=dev) → build+push image
+  → 3 trường hợp push: dev→dev, stg→stg, main→prd → tự trigger all_in_one (ENV tương ứng) → build+push image
 ```
 
 - **Job `gitlab-webhook-ci`** trên Dashboard là job trung gian (nhận webhook, lấy project + branch, tự trigger `all_in_one`).
+- **1 job webhook → 3 CI (fan-out theo branch):**
+  - push **`dev`** → build ENV=dev (image `dev-XX`)
+  - push **`stg`** → build ENV=stg (image `stg-XX`)
+  - push **`main`** → build ENV=prd (image `prd-XX`)
+  - push branch khác → **BO QUA** (không tạo build)
 - **GitLab → Settings → Webhooks** đã đăng ký URL `https://47.130.241.226:8443/generic-webhook-trigger/invoke?token=...` (Push events, SSL verification tắt — cert self-signed).
-- **Chỉ chạy khi push branch `dev`** (giống production — branch khác bị bỏ qua). Branch `dev` đã tạo trong repo techshop-app.
-- **Kết quả trên UI:** mỗi lần push dev, trong **Build History** của `all_in_one` sẽ tự xuất hiện build mới (ENV=dev, BRANCH=dev) — chỉ cần vào xem Console Output / Stage View, không cần điền gì.
+- Các branch `dev`, `stg` đã tạo trong repo techshop-app (từ `main`).
+- **Kết quả trên UI:** mỗi lần push 1 trong 3 branch trên, trong **Build History** của `all_in_one` sẽ tự xuất hiện build mới (ENV tương ứng) — chỉ cần vào xem Console Output / Stage View, không cần điền gì.
 - Muốn tắt: vào job `gitlab-webhook-ci` → **Disable** (hoặc xoá webhook trong GitLab).
 - Chi tiết kỹ thuật + lưu ý bảo mật: xem mục 6b trong báo cáo.
 
@@ -302,7 +307,7 @@ triggers {
 - Jenkins admin (**9090**) **không mở** ra internet (SG chỉ allowlist IP cụ thể) — vào bằng SSH tunnel.
 - Webhook đi qua **nginx reverse proxy HTTPS** (port **8443**), chỉ forward đúng path `/generic-webhook-trigger/`; mọi path khác trả **403**.
 - GitLab webhook trỏ `https://47.130.241.226:8443/...` (cert self-signed, SSL verification tắt).
-- **Branch filter**: chỉ `dev` mới trigger CI (trong script receiver — branch khác echo "BO QUA" rồi dừng, không tạo build).
+- **Branch filter**: 3 trường hợp push trong script receiver — `dev`→ENV=dev, `stg`→ENV=stg, `main`→ENV=prd; branch khác echo "BO QUA" rồi dừng (không tạo build).
 
 ---
 

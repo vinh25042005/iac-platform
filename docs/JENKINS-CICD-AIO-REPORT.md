@@ -162,7 +162,7 @@ GitLab push (branch dev) → https://47.130.241.226:8443/generic-webhook-trigger
 ```
 
 **Cấu hình đã làm (đã test thành công — receiver nhiều build, all_in_one #37/#38/#42 SUCCESS, image `dev-37`/`dev-38`/`dev-42`):**
-- Job `gitlab-webhook-ci` (Pipeline inline): `GenericTrigger` token + `genericVariables` (JSONPath `$.project.path_with_namespace`, `$.ref`) + **branch filter chỉ `dev`**.
+- Job `gitlab-webhook-ci` (Pipeline inline): `GenericTrigger` token + `genericVariables` (JSONPath `$.project.path_with_namespace`, `$.ref`) + **branch filter 3 trường hợp push**: `dev`→ENV=dev, `stg`→ENV=stg, `main`→ENV=prd (branch khác bỏ qua). Đã test: push dev→build #46 (dev), push stg→#47 (stg), push main→#48 (prd) đều SUCCESS.
   - ⚠️ Quan trọng: GenericVariable khai báo bằng **`value:`** (KHÔNG phải `expression:`) — `[key: 'X', value: '$.json.path']`.
   - ⚠️ Sau khi sửa config job, phải **chạy job 1 lần** để trigger đăng ký token (nếu không webhook trả 404).
 - **Nginx reverse proxy + HTTPS (self-signed)** chạy container `jenkins-webhook-proxy` (host network) trên EC2 Jenkins:
